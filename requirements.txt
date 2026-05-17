@@ -1,0 +1,18 @@
+# Core MTProto client (actively maintained Pyrogram fork — imports as 'pyrogram')
+pyrofork>=2.3.0
+tgcrypto  # MTProto encryption speedup (C extension — requires gcc on server)
+
+# Async MongoDB ODM (Beanie v2 uses PyMongo Async, Motor is deprecated)
+beanie>=2.1.0
+pymongo[srv]>=4.9.0
+
+# Health server for Render port binding
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Configuration
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# BSON for explicit ObjectId casting in aggregation pipelines (Safeguard #5)
+# Included with pymongo, but listed explicitly for clarity
