@@ -1,27 +1,21 @@
 """
 handlers/playback.py
 ─────────────────────────────────────────────────────────────────────────────
-Frictionless video delivery — single-click playback for approved users.
+Frictionless file delivery — single-click for approved users.
 
 Callback pattern: play:{file_doc_id}
 
 Flow:
-  1. User clicks 🎬 video button in the listing.
+  1. User clicks file button in the listing.
   2. Bot fetches the File document from MongoDB (just the file_id token).
-  3. Bot calls send_video(chat_id, video=file.file_id).
-     • This is a server-side token reference — Telegram streams the video
-       from its CDN directly to the user.
-     • The bot process touches ZERO bytes of the video payload.
-     • The user sees native inline streaming in the Telegram player.
-  4. callback_query.answer() dismisses the loading spinner.
-
-The file_id used here is the one obtained from the dump group via
-copy_message() during upload — it is the permanent CDN token for the
-dump group copy, which the bot can reuse indefinitely.
+  3. Bot sends the file via its permanent CDN file_id — zero bytes downloaded.
+  4. File auto-deletes from the chat after 4 hours.
+  5. Nav menu re-appears below the file so it stays at the bottom.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from pyrogram import filters
@@ -33,22 +27,86 @@ from bot.client import bot
 from models.user import User
 from middlewares.access_control import approved_and_above
 import services.file_service as file_service
+import services.folder_service as folder_service
 from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
+_AUTO_DELETE_HOURS = 4
+_AUTO_DELETE_SECONDS = _AUTO_DELETE_HOURS * 3600
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+async def _auto_delete_msg(client, chat_id: int, msg_id: int, delay: int) -> None:
+    """Fire-and-forget: delete a message after `delay` seconds."""
+    await asyncio.sleep(delay)
+    try:
+        await client.delete_messages(chat_id, msg_id)
+    except Exception:
+        pass  # Already deleted or too old
+
+
+class _SendAdapter:
+    """Lets render_folder send a NEW message instead of editing an existing one."""
+    def __init__(self, client, chat_id: int):
+        self._client = client
+        self._chat_id = chat_id
+
+    async def reply(self, text: str, **kwargs) -> None:
+        await self._client.send_message(self._chat_id, text, **kwargs)
+
+
+async def _build_caption(file_doc, client=None) -> str:
+    """Build a clean, organized caption with folder path and metadata."""
+    # ── Folder breadcrumb path ──────────────────────────────────────────────
+    if file_doc.folder_id:
+        crumbs = await folder_service.get_breadcrumbs(file_doc.folder_id)
+        parts = ["🏠 Root"] + [f"📁 {c.name}" for c in crumbs]
+        folder_path = "  ›  ".join(parts)
+    else:
+        folder_path = "🏠 Root"
+
+    # ── Metadata line ───────────────────────────────────────────────────────
+    meta: list[str] = []
+    if file_doc.duration is not None:
+        m, s = divmod(file_doc.duration, 60)
+        meta.append(f"⏱ {m}m {s:02d}s" if m else f"⏱ {s}s")
+    if file_doc.width and file_doc.height:
+        meta.append(f"📐 {file_doc.width}×{file_doc.height}")
+    if file_doc.file_size:
+        mb = file_doc.file_size / (1024 * 1024)
+        meta.append(f"💾 {mb:.1f} MB")
+
+    meta_line = "  ·  ".join(meta) if meta else ""
+
+    # ── Assemble caption ────────────────────────────────────────────────────
+    lines = [
+        f"📂 {folder_path}",
+        "",
+        f"{file_doc.icon} **{file_doc.name}**",
+    ]
+    if meta_line:
+        lines.append(meta_line)
+    lines += [
+        "",
+        f"⚠️ _Auto-deletes from this chat in {_AUTO_DELETE_HOURS} hours._",
+        "_Request again if you need it later._",
+    ]
+    return "\n".join(lines)
+
+
+# ── Main handler ──────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^play:"))
 @approved_and_above
 async def play_video(client, query: CallbackQuery, user: User) -> None:
     """
-    Deliver a video to the user via its permanent Telegram file_id token.
-
-    Safeguard #1 compliance: send_video(video=file_id) is a server-side
-    reference — no download, no RAM consumption, pure CDN streaming.
+    Deliver a file to the user via its permanent Telegram file_id token.
+    Safeguard #1: send_*() with file_id is a server-side CDN reference —
+    zero download, zero RAM consumption.
     """
-    # Dismiss the button loading spinner immediately
-    await query.answer("🎬 Loading…")
+    await query.answer("⏳ Preparing file…")
 
     parts = decode(query.data)
     if len(parts) < 2:
@@ -66,45 +124,69 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
         await query.answer("❌ File not found — it may have been deleted.", show_alert=True)
         return
 
-    # Build a rich caption with metadata
-    caption_parts = [f"🎬 **{file_doc.name}**"]
-    if file_doc.duration is not None:
-        m, s = divmod(file_doc.duration, 60)
-        caption_parts.append(f"⏱ {m}m {s:02d}s" if m else f"⏱ {s}s")
-    if file_doc.width and file_doc.height:
-        caption_parts.append(f"📐 {file_doc.width}×{file_doc.height}")
-    if file_doc.file_size:
-        mb = file_doc.file_size / (1024 * 1024)
-        caption_parts.append(f"💾 {mb:.1f} MB")
-
-    caption = "  ·  ".join(caption_parts)
+    chat_id = query.from_user.id
+    caption = await _build_caption(file_doc)
 
     try:
+        # ── Send the file (zero-copy CDN reference) ─────────────────────────
         if file_doc.file_type == "video":
-            await client.send_video(
-                chat_id=query.from_user.id,
+            sent = await client.send_video(
+                chat_id=chat_id,
                 video=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
                 supports_streaming=True,
             )
+        elif file_doc.file_type == "photo":
+            sent = await client.send_photo(
+                chat_id=chat_id,
+                photo=file_doc.file_id,
+                caption=caption,
+                parse_mode=ParseMode.MARKDOWN,
+            )
         else:
-            # document — forward as file with rich caption
-            await client.send_document(
-                chat_id=query.from_user.id,
+            # document, pdf, etc.
+            sent = await client.send_document(
+                chat_id=chat_id,
                 document=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
             )
+
         log.info(
-            "Delivered file %s (%s) to user %d",
-            file_doc.name, file_doc.file_id[:12] + "…", user.telegram_id,
+            "Delivered file %s (%s…) to user %d",
+            file_doc.name, file_doc.file_id[:12], user.telegram_id,
         )
+
+        # ── Auto-delete the file after 4 hours ──────────────────────────────
+        asyncio.create_task(_auto_delete_msg(client, chat_id, sent.id, _AUTO_DELETE_SECONDS))
+
+        # ── Bring nav menu back to the bottom ───────────────────────────────
+        # Delete the old nav message (it's now above the file), then re-send
+        # it below so the user always sees the menu at the bottom of the chat.
+        old_nav_id = query.message.id
+        folder_id_str = str(file_doc.folder_id) if file_doc.folder_id else "root"
+
+        await asyncio.sleep(0.5)  # Small pause for natural feel
+
+        try:
+            await client.delete_messages(chat_id, old_nav_id)
+        except Exception:
+            pass  # Nav may already be gone
+
+        from handlers.navigation import render_folder
+        await render_folder(
+            client,
+            _SendAdapter(client, chat_id),
+            folder_id=folder_id_str,
+            page=1,
+            user=user,
+        )
+
     except Exception as e:
         log.error("Playback error for file %s: %s", file_doc_id, e, exc_info=True)
-        # file_id may have expired — rare but possible
         await client.send_message(
-            chat_id=query.from_user.id,
+            chat_id=chat_id,
             text=(
                 f"❌ **Playback Error**\n\n"
                 f"Could not deliver **{file_doc.name}**.\n"
