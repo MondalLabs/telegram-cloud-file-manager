@@ -59,19 +59,7 @@ log = logging.getLogger(__name__)
 async def _refresh_folder(client, update: Message | CallbackQuery, folder_id: Optional[str], user: User) -> None:
     """Refresh the folder listing view after a CRUD operation."""
     from handlers.navigation import render_folder
-    if isinstance(update, CallbackQuery):
-        await render_folder(client, update, folder_id=folder_id, page=1, user=user)
-    else:
-        # For message-based completions, send a new message with the listing
-        class _FakeQuery:
-            """Adapts a Message to look like a CallbackQuery for render_folder."""
-            def __init__(self, msg):
-                self._msg = msg
-            async def edit_message_text(self, text, **kwargs):
-                await self._msg.reply(text, **kwargs)
-            async def answer(self, *a, **kw):
-                pass
-        await render_folder(client, _FakeQuery(update), folder_id=folder_id, page=1, user=user)
+    await render_folder(client, update, folder_id=folder_id, page=1, user=user)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

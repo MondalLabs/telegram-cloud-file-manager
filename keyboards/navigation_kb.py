@@ -42,7 +42,7 @@ def _folder_button(folder: Folder) -> InlineKeyboardButton:
 
 def _file_button(file: File) -> InlineKeyboardButton:
     meta = f"  [{file.display_meta}]" if file.display_meta != "media" else ""
-    label = f"🎬  {file.name}{meta}"
+    label = f"{file.icon}  {file.name}{meta}"
     return InlineKeyboardButton(
         text=label,
         callback_data=encode(ACTION_PLAY, str(file.id)),

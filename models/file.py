@@ -53,6 +53,18 @@ class File(Document):
         return f"<File id={self.id} name={self.name!r} folder={self.folder_id}>"
 
     @property
+    def icon(self) -> str:
+        """Return an emoji that represents the file type, based on mime_type."""
+        mt = self.mime_type or ""
+        if mt.startswith("video/"):              return "🎬"
+        if mt.startswith("image/"):              return "🖼️"
+        if mt == "application/pdf":              return "📄"
+        if mt.startswith("audio/"):              return "🎵"
+        if mt.startswith("text/"):               return "📝"
+        if self.file_type == "video":            return "🎬"
+        return "📎"  # generic document
+
+    @property
     def display_meta(self) -> str:
         """Human-readable metadata string for upload confirmation messages."""
         parts = []
