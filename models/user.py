@@ -39,6 +39,9 @@ class User(Document):
     approved_by: Optional[int] = None      # Telegram ID of approving admin
     revoked_at: Optional[datetime] = None
 
+    # ── UI state (persisted so it survives server restarts) ───────────────────
+    last_menu_id: Optional[int] = None     # Telegram message_id of last bot menu
+
     class Settings:
         name = "users"
         indexes = [

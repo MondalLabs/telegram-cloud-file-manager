@@ -86,9 +86,20 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
     )
 
 
+# ── Auto-delete helper ────────────────────────────────────────────────────────────────
+
+async def _auto_delete(client, chat_id: int, msg_id: int, delay: int = 8) -> None:
+    """Fire-and-forget: delete a message after `delay` seconds."""
+    await asyncio.sleep(delay)
+    try:
+        await client.delete_messages(chat_id, msg_id)
+    except Exception:
+        pass  # Already deleted or too old
+
+
 # ── Per-file handler (fires when user is in upload state) ─────────────────────
 
-@bot.on_message(filters.private & (filters.video | filters.document))
+@bot.on_message(filters.private & (filters.video | filters.document | filters.photo))
 @owner_only
 async def upload_file_handler(client, message: Message, user: User) -> None:
     """
@@ -128,6 +139,8 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
             f"_{file_doc.display_meta}_",
             parse_mode=ParseMode.MARKDOWN,
         )
+        # Auto-delete the confirmation after 8s to keep the chat clean
+        asyncio.create_task(_auto_delete(client, message.chat.id, processing_msg.id))
 
     except RuntimeError as e:
         # Dump group not configured

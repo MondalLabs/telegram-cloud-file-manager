@@ -52,8 +52,15 @@ def _guest_text(telegram_id: int) -> str:
 async def start_command(client, message: Message, user: User) -> None:
     """Entry point — renders the correct dashboard based on user role."""
 
+    # Delete the previous menu message to keep the chat clean
+    if user.last_menu_id:
+        try:
+            await client.delete_messages(message.chat.id, user.last_menu_id)
+        except Exception:
+            pass  # Already deleted, too old (>48h), or message not found
+
     if user.role == UserRole.OWNER:
-        await message.reply(
+        sent = await message.reply(
             f"👋 Welcome back, **{user.display_name}**!\n\n"
             "🛠️ **Admin Dashboard** — Cloud File Manager",
             reply_markup=admin_dashboard_kb(),
@@ -61,18 +68,22 @@ async def start_command(client, message: Message, user: User) -> None:
         )
 
     elif user.role == UserRole.APPROVED:
-        await message.reply(
+        sent = await message.reply(
             f"👋 Hello, **{user.display_name}**!\n\n"
             "📚 Browse the library below.",
             reply_markup=_approved_kb(),
             parse_mode=ParseMode.MARKDOWN,
         )
 
-    else:  # GUEST
+    else:  # GUEST — no menu to track (they have no navigation)
         await message.reply(
             _guest_text(user.telegram_id),
             parse_mode=ParseMode.MARKDOWN,
         )
+        return
+
+    # Persist the new menu message ID so it survives server restarts
+    await user.set({User.last_menu_id: sent.id})
 
 
 # ── Callback: return to dashboard from anywhere ───────────────────────────────

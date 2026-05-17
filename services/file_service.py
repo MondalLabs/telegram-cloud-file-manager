@@ -123,11 +123,18 @@ async def route_to_cdn(
         )
 
     # ── Safeguard #4: detect media type ──────────────────────────────────────
-    media = message.video or message.document
-    if media is None:
-        raise ValueError("Message contains no video or document media.")
-
-    file_type = "video" if message.video is not None else "document"
+    if message.photo:
+        # Photos are the largest-size Photo object (not a list in Pyrofork)
+        media = message.photo
+        file_type = "photo"
+    elif message.video:
+        media = message.video
+        file_type = "video"
+    elif message.document:
+        media = message.document
+        file_type = "document"
+    else:
+        raise ValueError("Message contains no supported media (video, document, or photo).")
 
     # ── Safeguard #1: server-side copy — zero RAM ─────────────────────────────
     copied_msg = await client.copy_message(
@@ -144,13 +151,19 @@ async def route_to_cdn(
     cdn_file_id = copied_media.file_id
 
     # ── Safeguard #4: safe metadata extraction via getattr ────────────────────
-    raw_name: str = getattr(media, "file_name", None) or f"video_{message.id}.mp4"
+    # Photos: no file_name, mime_type defaults to image/jpeg
+    raw_name: str = (
+        getattr(media, "file_name", None)
+        or (f"photo_{message.id}.jpg" if file_type == "photo" else f"file_{message.id}")
+    )
     file_size: Optional[int] = getattr(media, "file_size", None)
     duration_raw = getattr(media, "duration", None)
     duration: Optional[int] = int(duration_raw) if duration_raw is not None else None
     width: Optional[int] = getattr(media, "width", None)
     height: Optional[int] = getattr(media, "height", None)
-    mime_type: Optional[str] = getattr(media, "mime_type", None)
+    mime_type: Optional[str] = getattr(media, "mime_type", None) or (
+        "image/jpeg" if file_type == "photo" else None
+    )
 
     return await create_file(
         name=raw_name,

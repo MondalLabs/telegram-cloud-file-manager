@@ -5,7 +5,8 @@ Run with: python -m bot
 Pattern: identical to the working diag_test.py.
   1. DB init on event loop (before bot starts)
   2. Uvicorn in daemon thread
-  3. bot.run() — NO coroutine argument (proven to work)
+  3. Register bot commands with Telegram (set_my_commands)
+  4. bot.run() — NO coroutine argument (proven to work)
 """
 
 import asyncio
@@ -71,8 +72,10 @@ async def _init_db():
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────
-# Step 1: DB init on the current event loop (same loop bot.run() will use)
-asyncio.get_event_loop().run_until_complete(_init_db())
+_loop = asyncio.get_event_loop()
+
+# Step 1: DB init on the current event loop
+_loop.run_until_complete(_init_db())
 
 # Step 2: Uvicorn health server in a daemon thread (separate loop, no conflict)
 threading.Thread(
@@ -82,7 +85,35 @@ threading.Thread(
 ).start()
 log.info("Health server starting on port %d...", settings.health_port)
 
-# Step 3: bot.run() — PROVEN pattern from diag_test.py
-# Internally: run(start()) → run(idle()) → run(stop()) — all on the same loop
-log.info("Starting bot...")
-bot.run()
+
+async def _run():
+    """Single-connection lifecycle: start → register commands → idle → stop."""
+    # Step 3: Start the bot (one connection, same event loop as DB)
+    await bot.start()
+    log.info("Starting bot...")
+
+    # Step 4: Register bot commands now that the client is connected
+    from pyrogram.types import BotCommand
+    await bot.set_bot_commands([
+        BotCommand("start",  "📁 Open the Cloud File Manager"),
+        BotCommand("done",   "✅ Finish current upload session"),
+        BotCommand("cancel", "❌ Cancel current operation"),
+    ])
+    log.info("Bot commands registered with Telegram.")
+    log.info("Bot ready. Waiting for messages...")
+
+    # Step 5: Idle — sleep in chunks so KeyboardInterrupt is caught cleanly
+    try:
+        while True:
+            await asyncio.sleep(60)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        log.info("Shutting down...")
+        await bot.stop()
+
+
+try:
+    _loop.run_until_complete(_run())
+except KeyboardInterrupt:
+    pass
