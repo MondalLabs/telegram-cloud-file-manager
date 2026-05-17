@@ -49,14 +49,15 @@ def confirm_delete_kb(
 def confirm_revoke_kb(user_doc_id: str, display_name: str) -> InlineKeyboardMarkup:
     """
     Specific confirm keyboard for revoking a user's access.
-    Includes the user's display name in the button text for clarity.
+    Button encodes yes:ur:{id} so it hits the revoke_confirmed handler,
+    NOT the show-confirmation handler (which would cause an infinite loop).
     """
-    from utils.callback_data import ACTION_USR_REVOKE
+    from utils.callback_data import ACTION_USR_REVOKE, ACTION_CONFIRM
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
                 text=f"✅ Revoke {display_name}",
-                callback_data=encode(ACTION_USR_REVOKE, user_doc_id),
+                callback_data=encode(ACTION_CONFIRM, ACTION_USR_REVOKE, user_doc_id),
             ),
             InlineKeyboardButton(
                 text="❌ Cancel",

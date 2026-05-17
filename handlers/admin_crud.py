@@ -46,7 +46,7 @@ from utils.callback_data import (
     ACTION_CF, ACTION_RF, ACTION_DF,
     ACTION_REN_FILE, ACTION_DEL_FILE,
     ACTION_CONFIRM, ACTION_CANCEL,
-    ACTION_NAV,
+    ACTION_NAV, ACTION_USR_REVOKE,
 )
 
 log = logging.getLogger(__name__)
@@ -274,6 +274,24 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
                 "❌ File not found — may have already been deleted.",
                 reply_markup=admin_dashboard_kb(),
             )
+
+    elif action == ACTION_USR_REVOKE:
+        # Revoke user access — routed here because confirm_action owns all yes: callbacks
+        import services.user_service as _user_svc
+        from keyboards.admin_kb import user_management_kb as _umgmt_kb
+        target = await _user_svc.find_user_by_id_doc(target_id)
+        if target is None:
+            await query.edit_message_text("❌ User not found.", reply_markup=admin_dashboard_kb())
+            return
+        await _user_svc.revoke_user(target.telegram_id)
+        await query.edit_message_text(
+            f"✅ **Access Revoked**\n\n"
+            f"**{target.display_name}** (`{target.telegram_id}`) "
+            f"has been downgraded to Guest.",
+            reply_markup=_umgmt_kb(),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+
     else:
         await query.edit_message_text("❌ Unknown action.", reply_markup=admin_dashboard_kb())
 

@@ -32,7 +32,7 @@ from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
-_AUTO_DELETE_HOURS = 4
+_AUTO_DELETE_HOURS = 0.005
 _AUTO_DELETE_SECONDS = _AUTO_DELETE_HOURS * 3600
 
 
@@ -136,6 +136,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
                 supports_streaming=True,
+                protect_content=True,
             )
         elif file_doc.file_type == "photo":
             sent = await client.send_photo(
@@ -143,6 +144,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 photo=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
+                protect_content=True,
             )
         else:
             # document, pdf, etc.
@@ -151,6 +153,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 document=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
+                protect_content=True,
             )
 
         log.info(

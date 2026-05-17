@@ -83,6 +83,17 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
         await message.reply("⚠️ You can't approve/modify the owner account.")
         return
 
+    # ── Validate: user must have messaged the bot first ────────────────────────
+    existing = await user_service.find_user_by_id(target_id)
+    if existing is None:
+        await message.reply(
+            f"⚠️ **User not found**\n\n"
+            f"No user with ID `{target_id}` has ever messaged this bot.\n"
+            f"They must send /start to the bot first before you can approve them.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
     try:
         approved = await user_service.approve_user(target_id, approved_by=user.telegram_id)
     except ValueError as e:
@@ -91,11 +102,6 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
         return
 
     await fsm_service.clear_state(user.telegram_id)
-
-    if approved is None:
-        # User not in DB — auto-create as approved
-        approved = await user_service.get_or_create(target_id)
-        approved = await user_service.approve_user(target_id, approved_by=user.telegram_id)
 
     await message.reply(
         f"✅ **Access Granted**\n\n"
@@ -195,14 +201,20 @@ async def revoke_user_callback(client, query: CallbackQuery, user: User) -> None
         await query.answer("❌ User not found.", show_alert=True)
         return
 
-    await query.edit_message_text(
-        f"🚫 **Revoke Access**\n\n"
-        f"User: **{target.display_name}**\n"
-        f"ID: `{target.telegram_id}`\n\n"
-        f"This user will no longer be able to browse the library.",
-        reply_markup=confirm_revoke_kb(user_doc_id, target.display_name),
-        parse_mode=ParseMode.MARKDOWN,
-    )
+    try:
+        await query.edit_message_text(
+            f"🚫 **Revoke Access**\n\n"
+            f"User: **{target.display_name}**\n"
+            f"ID: `{target.telegram_id}`\n\n"
+            f"This user will no longer be able to browse the library.",
+            reply_markup=confirm_revoke_kb(user_doc_id, target.display_name),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    except Exception as e:
+        if "MESSAGE_NOT_MODIFIED" in str(e):
+            pass  # Confirmation already showing — safe to ignore
+        else:
+            raise
 
 
 # Register the yes:ur: confirmation in confirm_kb — handled by admin_crud.py's
