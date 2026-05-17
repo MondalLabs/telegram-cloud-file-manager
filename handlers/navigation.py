@@ -196,7 +196,7 @@ async def file_info_callback(client, query: CallbackQuery, user: User) -> None:
         return
 
     await query.edit_message_text(
-        f"⚙️ **File Actions**\n\n🎬 {file_doc.name}\n_{file_doc.display_meta}_",
+        f"⚙️ **File Actions**\n\n🎬 {file_doc.name}\n__{file_doc.display_meta}__",
         reply_markup=file_actions_kb(file_doc_id, str(file_doc.folder_id)),
         parse_mode=ParseMode.MARKDOWN,
     )

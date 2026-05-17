@@ -136,7 +136,7 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
         await processing_msg.edit_text(
             f"✅ **Indexed** ({new_count})\n"
             f"📄 {file_doc.name}\n"
-            f"_{file_doc.display_meta}_",
+            f"__{file_doc.display_meta}__",
             parse_mode=ParseMode.MARKDOWN,
         )
         # Auto-delete the confirmation after 8s to keep the chat clean

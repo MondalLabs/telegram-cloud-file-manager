@@ -32,8 +32,16 @@ from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
-_AUTO_DELETE_HOURS = 0.005
+_AUTO_DELETE_HOURS = 1
 _AUTO_DELETE_SECONDS = _AUTO_DELETE_HOURS * 3600
+# Human-readable label shown in the file caption
+_DELETE_LABEL = (
+    f"{int(_AUTO_DELETE_SECONDS)}s"
+    if _AUTO_DELETE_SECONDS < 60
+    else f"{int(_AUTO_DELETE_SECONDS // 60)}m"
+    if _AUTO_DELETE_SECONDS < 3600
+    else f"{_AUTO_DELETE_HOURS:g} hour{'s' if _AUTO_DELETE_HOURS != 1 else ''}"
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,8 +98,8 @@ async def _build_caption(file_doc, client=None) -> str:
         lines.append(meta_line)
     lines += [
         "",
-        f"⚠️ _Auto-deletes from this chat in {_AUTO_DELETE_HOURS} hours._",
-        "_Request again if you need it later._",
+        f"⚠️ __Auto-deletes from this chat in {_DELETE_LABEL}.__",
+        "__Request again if you need it later.__",
     ]
     return "\n".join(lines)
 

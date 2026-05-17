@@ -224,7 +224,7 @@ async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
     await query.edit_message_text(
         f"🗑️ **Delete File**\n\n"
         f"🎬 **{file_doc.name}**\n"
-        f"_{file_doc.display_meta}_\n\n"
+        f"__{file_doc.display_meta}__\n\n"
         f"⚠️ This will remove the file from the library. "
         f"The video remains in the CDN but will be inaccessible.",
         reply_markup=confirm_delete_kb(ACTION_DEL_FILE, file_doc_id, label="Delete"),
