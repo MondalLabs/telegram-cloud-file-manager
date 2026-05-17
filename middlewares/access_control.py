@@ -32,6 +32,7 @@ import logging
 from functools import wraps
 from typing import Callable
 
+from pyrogram.enums import ParseMode
 from pyrogram.types import Message, CallbackQuery
 
 from models.user import User, UserRole

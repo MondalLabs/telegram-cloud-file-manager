@@ -59,15 +59,14 @@ async def approve_start(client, query: CallbackQuery, user: User) -> None:
     )
 
 
-@bot.on_message(filters.text & filters.private & ~filters.command(["start", "cancel", "done"]))
+@bot.on_message(filters.text & filters.private & ~filters.command(["start", "cancel", "done"]), group=1)
 @owner_only
 async def approve_user_id_input(client, message: Message, user: User) -> None:
     """
     Process the Telegram ID input for the Approve User FSM.
-    Note: This handler overlaps with admin_crud.py's fsm_text_router.
-    Because Pyrofork fires ALL matching handlers in registration order,
-    BOTH handlers will be called. Each one checks its own expected state
-    and returns early if it doesn't match — so only the correct one acts.
+    Registered in group=1 so it fires AFTER fsm_text_router (group=0) in
+    admin_crud.py. Pyrogram only fires the first matching handler per group,
+    so without the different group this handler would never be called.
     """
     state, data = await fsm_service.get_state_and_data(user.telegram_id)
     if state != "approve_user:waiting_id":
