@@ -24,6 +24,7 @@ from pyrogram.types import CallbackQuery
 from beanie import PydanticObjectId
 
 from bot.client import bot
+from bot.config import settings as cfg
 from models.user import User
 from middlewares.access_control import approved_and_above
 import services.file_service as file_service
@@ -32,16 +33,16 @@ from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
-_AUTO_DELETE_HOURS = 1
-_AUTO_DELETE_SECONDS = _AUTO_DELETE_HOURS * 3600
-# Human-readable label shown in the file caption
-_DELETE_LABEL = (
-    f"{int(_AUTO_DELETE_SECONDS)}s"
-    if _AUTO_DELETE_SECONDS < 60
-    else f"{int(_AUTO_DELETE_SECONDS // 60)}m"
-    if _AUTO_DELETE_SECONDS < 3600
-    else f"{_AUTO_DELETE_HOURS:g} hour{'s' if _AUTO_DELETE_HOURS != 1 else ''}"
-)
+
+def _delete_label() -> str:
+    """Human-readable auto-delete time string, built from the live cfg value."""
+    seconds = cfg.auto_delete_hours * 3600
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m"
+    h = cfg.auto_delete_hours
+    return f"{h:g} hour{'s' if h != 1 else ''}"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,9 +99,13 @@ async def _build_caption(file_doc, client=None) -> str:
         lines.append(meta_line)
     lines += [
         "",
-        f"⚠️ __Auto-deletes from this chat in {_DELETE_LABEL}.__",
-        "__Request again if you need it later.__",
     ]
+    # Only add the auto-delete warning if the feature is enabled
+    if cfg.auto_delete_hours > 0:
+        lines += [
+            f"⚠️ __Auto-deletes from this chat in {_delete_label()}.__",
+            "__Request again if you need it later.__",
+        ]
     return "\n".join(lines)
 
 
@@ -144,7 +149,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
                 supports_streaming=True,
-                protect_content=True,
+                protect_content=cfg.protect_content,
             )
         elif file_doc.file_type == "photo":
             sent = await client.send_photo(
@@ -152,7 +157,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 photo=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
-                protect_content=True,
+                protect_content=cfg.protect_content,
             )
         else:
             # document, pdf, etc.
@@ -161,7 +166,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
                 document=file_doc.file_id,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
-                protect_content=True,
+                protect_content=cfg.protect_content,
             )
 
         log.info(
@@ -169,8 +174,11 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
             file_doc.name, file_doc.file_id[:12], user.telegram_id,
         )
 
-        # ── Auto-delete the file after 4 hours ──────────────────────────────
-        asyncio.create_task(_auto_delete_msg(client, chat_id, sent.id, _AUTO_DELETE_SECONDS))
+        # ── Auto-delete the file after configured hours (0 = disabled) ─────────
+        if cfg.auto_delete_hours > 0:
+            delay = int(cfg.auto_delete_hours * 3600)
+            asyncio.create_task(_auto_delete_msg(client, chat_id, sent.id, delay))
+
 
         # ── Bring nav menu back to the bottom ───────────────────────────────
         # Delete the old nav message (it's now above the file), then re-send

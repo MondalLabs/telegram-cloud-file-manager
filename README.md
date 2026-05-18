@@ -82,18 +82,28 @@ If you want to run the bot on your own computer:
    ```
 
 4. **Configure Environment Variables:**
-   Rename the `.env.example` file to `.env` and fill in the values you gathered above:
+   Rename `.env.example` to `.env` and fill in your values:
    ```env
+   # ── SECRETS ────────────────────────────────────────────────────
    API_ID=your_api_id
    API_HASH=your_api_hash
    BOT_TOKEN=your_bot_token
    MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/
+
+   # ── DEPLOYMENT ─────────────────────────────────────────────────
    OWNER_ID=your_telegram_id
-   DUMP_CHAT_ID= 
+   DUMP_CHAT_ID=          # Leave blank — auto-detected via /setup
    HEALTH_PORT=10000
+
+   # ── PERSONALISATION ────────────────────────────────────────────
+   BOT_NAME=              # Optional. E.g. "My Private Drive"
+
+   # ── PREFERENCES ────────────────────────────────────────────────
    ITEMS_PER_PAGE=15
+   PROTECT_CONTENT=true   # true = files cannot be forwarded/saved
+   AUTO_DELETE_HOURS=1    # 0 = never delete, decimals allowed
    ```
-   *(Leave `DUMP_CHAT_ID` blank for now).*
+   *(Leave `DUMP_CHAT_ID` and `BOT_NAME` blank for now).*
 
 5. **Start the Bot:**
    ```bash
@@ -125,11 +135,40 @@ You can host this bot 24/7 for **free** using [Render.com](https://render.com).
    * **Environment:** `Python 3`
    * **Build Command:** `pip install -r requirements.txt`
    * **Start Command:** `python -m bot`
-5. Scroll down to **Environment Variables** and add all the variables from your `.env` file (`API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGO_URI`, `OWNER_ID`, `HEALTH_PORT=10000`).
-6. Click **Create Web Service**. 
+5. Scroll down to **Environment Variables** and add all required variables:
+   `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGO_URI`, `OWNER_ID`, `HEALTH_PORT=10000`
+   — plus any preferences you want to customise (`BOT_NAME`, `PROTECT_CONTENT`, `AUTO_DELETE_HOURS`).
+6. Click **Create Web Service**.
 
 > **💡 Why a Web Service?** 
 > Render's free tier spins down background workers. By using a Web Service, the built-in `HEALTH_PORT` (Uvicorn server) binds to a port. You can then use a free pinging service like [Cron-job.org](https://cron-job.org) to ping your Render URL every 14 minutes, keeping your bot awake 24/7 forever!
+
+---
+
+## ⚙️ Personalisation & Preferences
+
+All customisation is done in a single place: your `.env` file. No code changes required.
+
+| Variable | Default | Description |
+|---|---|---|
+| `BOT_NAME` | *(blank)* | Display name shown in welcome and access-denied messages. Supports spaces. Leave blank for generic text. |
+| `PROTECT_CONTENT` | `true` | `true` = users cannot forward or save delivered files. `false` = open. |
+| `AUTO_DELETE_HOURS` | `1` | Hours before a delivered file is deleted from the user's chat. `0` = never delete. Decimals allowed (`0.5` = 30 min). |
+| `ITEMS_PER_PAGE` | `15` | Number of files/folders shown per page in folder listings. |
+
+**Example — Personalised Setup:**
+```env
+BOT_NAME=Rudra's Private Drive
+PROTECT_CONTENT=true
+AUTO_DELETE_HOURS=2
+```
+
+With `BOT_NAME` set, the bot will greet users with:
+- Owner: `🛠️ Admin Dashboard — Rudra's Private Drive`
+- Approved: `👋 Hello, John! Welcome to Rudra's Private Drive.`
+- Guest: `...request access to Rudra's Private Drive.`
+
+With `BOT_NAME` left blank, all messages use neutral, generic language. The bot is 100% white-labelled.
 
 ---
 
@@ -138,8 +177,8 @@ You can host this bot 24/7 for **free** using [Render.com](https://render.com).
 * **`/start`** - Opens the main dashboard (always cleans up old menus so your chat stays neat).
 * **Manage Folders** - Click "New Folder" to create infinite nested hierarchies.
 * **Upload Files** - Click "Upload", select the folder destination, and forward/send any files, photos, or videos to the bot. Click "✅ Done" when finished.
-* **Manage Users** - Only the Owner sees the "Manage Users" button. You can approve pending users by entering their Telegram ID, or revoke them at any time.
-* **Playback** - When an approved user clicks a file, it is delivered securely with rich metadata (Duration, Size, Resolution) and is automatically deleted after 1 hour.
+* **Manage Users** - Only the Owner sees the "Manage Users" button. You can approve pending users by entering their Telegram ID, or revoke them at any time. Note: users must have sent `/start` to the bot first before they can be approved.
+* **Playback** - When an approved user clicks a file, it is delivered securely with rich metadata (Duration, Size, Resolution). If `AUTO_DELETE_HOURS` is set, the file auto-deletes after that time.
 
 ---
 *Built for robust, scalable Telegram architecture by [Mondal Labs](https://mondallabs.com).*

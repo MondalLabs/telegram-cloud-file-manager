@@ -94,11 +94,14 @@ async def _run():
 
     # Step 4: Register bot commands now that the client is connected
     from pyrogram.types import BotCommand
+    from bot.config import settings as cfg
+    _start_desc = f"📁 Open {cfg.display_name}" if cfg.display_name else "📁 Open the File Manager"
     await bot.set_bot_commands([
-        BotCommand("start",  "📁 Open the File Manager"),
+        BotCommand("start",  _start_desc),
         BotCommand("done",   "✅ Finish current upload session"),
         BotCommand("cancel", "❌ Cancel current operation"),
     ])
+
     log.info("Bot commands registered with Telegram.")
     log.info("Bot ready. Waiting for messages...")
 

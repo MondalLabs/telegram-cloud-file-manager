@@ -20,6 +20,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot.client import bot
+from bot.config import settings as cfg
 from models.user import User, UserRole
 from middlewares.access_control import any_user, owner_only
 from keyboards.admin_kb import admin_dashboard_kb, user_management_kb
@@ -38,12 +39,13 @@ def _approved_kb() -> InlineKeyboardMarkup:
 
 
 def _guest_text(telegram_id: int) -> str:
+    name_clause = f" to **{cfg.display_name}**" if cfg.display_name else ""
     return (
         "🔒 **Access Denied**\n\n"
-        "This bot is private and by-invitation only.\n\n"
+        f"This bot is private and by-invitation only.\n\n"
         "Your Telegram ID:\n"
         f"`{telegram_id}`\n\n"
-        "Send this ID to the administrator to request access."
+        f"Send this ID to the administrator to request access{name_clause}."
     )
 
 
@@ -60,16 +62,18 @@ async def start_command(client, message: Message, user: User) -> None:
             pass  # Already deleted, too old (>48h), or message not found
 
     if user.role == UserRole.OWNER:
+        name_line = f" — **{cfg.display_name}**" if cfg.display_name else ""
         sent = await message.reply(
             f"👋 Welcome back, **{user.display_name}**!\n\n"
-            "🛠️ **Admin Dashboard**",
+            f"🛠️ **Admin Dashboard**{name_line}",
             reply_markup=admin_dashboard_kb(),
             parse_mode=ParseMode.MARKDOWN,
         )
 
     elif user.role == UserRole.APPROVED:
+        name_line = f" to **{cfg.display_name}**" if cfg.display_name else ""
         sent = await message.reply(
-            f"👋 Hello, **{user.display_name}**!\n\n"
+            f"👋 Hello, **{user.display_name}**! Welcome{name_line}.\n\n"
             "📚 Browse the library below.",
             reply_markup=_approved_kb(),
             parse_mode=ParseMode.MARKDOWN,
