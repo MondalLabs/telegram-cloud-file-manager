@@ -14,13 +14,19 @@ from fastapi import FastAPI
 from bot.config import settings
 
 # ── Pyrofork MTProto client ───────────────────────────────────────────────────
-# name="cfm_bot" → session file stored as cfm_bot.session
+# Pinning the session to an explicit path ensures the .session file is ALWAYS
+# written to the project root, regardless of which directory the process is
+# launched from. This prevents stale duplicate sessions appearing in /bot/.
+import os as _os
+_SESSION = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), "cfm_bot")
+
 bot = Client(
-    name="cfm_bot",
+    name=_SESSION,
     api_id=settings.api_id,
     api_hash=settings.api_hash,
     bot_token=settings.bot_token,
 )
+
 
 # ── FastAPI health server ─────────────────────────────────────────────────────
 # Render Web Service requires the process to bind a port; this lightweight
