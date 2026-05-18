@@ -142,4 +142,4 @@ You can host this bot 24/7 for **free** using [Render.com](https://render.com).
 * **Playback** - When an approved user clicks a file, it is delivered securely with rich metadata (Duration, Size, Resolution) and is automatically deleted after 1 hour.
 
 ---
-*Built with ❤️ for robust, scalable Telegram architecture.*
+*Built for robust, scalable Telegram architecture by [Mondal Labs](https://mondallabs.com).*
