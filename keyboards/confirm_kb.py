@@ -46,6 +46,18 @@ def confirm_delete_kb(
     ])
 
 
+def cancel_only_kb() -> InlineKeyboardMarkup:
+    """Keyboard with just a Cancel button to abort an FSM state."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                text="❌ Cancel",
+                callback_data=encode(ACTION_CANCEL),
+            ),
+        ],
+    ])
+
+
 def confirm_revoke_kb(user_doc_id: str, display_name: str) -> InlineKeyboardMarkup:
     """
     Specific confirm keyboard for revoking a user's access.

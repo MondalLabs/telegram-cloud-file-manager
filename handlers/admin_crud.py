@@ -36,7 +36,7 @@ from beanie import PydanticObjectId
 from bot.client import bot
 from models.user import User, UserRole
 from middlewares.access_control import owner_only
-from keyboards.confirm_kb import confirm_delete_kb
+from keyboards.confirm_kb import confirm_delete_kb, cancel_only_kb
 from keyboards.admin_kb import admin_dashboard_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
@@ -109,7 +109,8 @@ async def create_folder_start(client, query: CallbackQuery, user: User) -> None:
     await query.edit_message_text(
         "📁 **Create New Folder**\n\n"
         "Send the folder name as a message.\n"
-        "Or /cancel to abort.",
+        "Or tap Cancel to abort.",
+        reply_markup=cancel_only_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -141,7 +142,8 @@ async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
         f"✏️ **Rename Folder**\n\n"
         f"Current name: **{folder.name}**\n\n"
         f"Send the new folder name.\n"
-        f"Or /cancel to abort.",
+        f"Or tap Cancel to abort.",
+        reply_markup=cancel_only_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -199,7 +201,8 @@ async def rename_file_start(client, query: CallbackQuery, user: User) -> None:
         f"✏️ **Rename File**\n\n"
         f"Current name: **{file_doc.name}**\n\n"
         f"Send the new file name.\n"
-        f"Or /cancel to abort.",
+        f"Or tap Cancel to abort.",
+        reply_markup=cancel_only_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -342,7 +345,7 @@ async def _handle_create_folder(client, message: Message, user: User, data: dict
         await message.reply(f"✅ Folder **{folder.name}** created.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=parent_id_str, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {e}\n\nSend a different name or /cancel to abort.")
+        await message.reply(f"⚠️ {e}\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
 
 
 async def _handle_rename_folder(client, message: Message, user: User, data: dict) -> None:
@@ -357,7 +360,7 @@ async def _handle_rename_folder(client, message: Message, user: User, data: dict
         await message.reply(f"✅ Renamed to **{folder.name}**.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=back_folder_id, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {e}\n\nSend a different name or /cancel to abort.")
+        await message.reply(f"⚠️ {e}\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
 
 
 async def _handle_rename_file(client, message: Message, user: User, data: dict) -> None:
