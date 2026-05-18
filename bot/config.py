@@ -10,7 +10,7 @@ from pydantic import Field
 
 
 class Settings(BaseSettings):
-    """All runtime configuration for the Cloud File Manager bot."""
+    """All runtime configuration for the bot."""
 
     model_config = SettingsConfigDict(
         env_file=".env",

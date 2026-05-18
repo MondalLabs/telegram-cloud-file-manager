@@ -95,7 +95,7 @@ async def _run():
     # Step 4: Register bot commands now that the client is connected
     from pyrogram.types import BotCommand
     await bot.set_bot_commands([
-        BotCommand("start",  "📁 Open the Cloud File Manager"),
+        BotCommand("start",  "📁 Open the File Manager"),
         BotCommand("done",   "✅ Finish current upload session"),
         BotCommand("cancel", "❌ Cancel current operation"),
     ])

@@ -62,7 +62,7 @@ async def start_command(client, message: Message, user: User) -> None:
     if user.role == UserRole.OWNER:
         sent = await message.reply(
             f"👋 Welcome back, **{user.display_name}**!\n\n"
-            "🛠️ **Admin Dashboard** — Cloud File Manager",
+            "🛠️ **Admin Dashboard**",
             reply_markup=admin_dashboard_kb(),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -94,7 +94,7 @@ async def dashboard_callback(client, query: CallbackQuery, user: User) -> None:
     """Return to the admin dashboard."""
     await query.answer()
     await query.edit_message_text(
-        f"🛠️ **Admin Dashboard** — Cloud File Manager",
+        f"🛠️ **Admin Dashboard**",
         reply_markup=admin_dashboard_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -116,7 +116,7 @@ async def user_menu_callback(client, query: CallbackQuery, user: User) -> None:
     """Open the user management sub-menu."""
     await query.answer()
     await query.edit_message_text(
-        "👤 **User Management**\n\nManage access to the Cloud File Manager.",
+        "👤 **User Management**\n\nManage user access to the library.",
         reply_markup=user_management_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )

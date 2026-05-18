@@ -25,7 +25,7 @@ bot = Client(
 # ── FastAPI health server ─────────────────────────────────────────────────────
 # Render Web Service requires the process to bind a port; this lightweight
 # server satisfies that requirement and gives UptimeRobot a ping target.
-health_app = FastAPI(title="Cloud File Manager — Health")
+health_app = FastAPI(title="Health Server")
 
 
 @health_app.get("/health")
