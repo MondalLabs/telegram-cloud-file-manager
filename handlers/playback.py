@@ -14,6 +14,7 @@ Flow:
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import asyncio
 import logging
@@ -33,7 +34,6 @@ from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
-
 def _delete_label() -> str:
     """Human-readable auto-delete time string, built from the live cfg value."""
     seconds = cfg.auto_delete_hours * 3600
@@ -43,7 +43,6 @@ def _delete_label() -> str:
         return f"{int(seconds // 60)}m"
     h = cfg.auto_delete_hours
     return f"{h:g} hour{'s' if h != 1 else ''}"
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,7 +54,6 @@ async def _auto_delete_msg(client, chat_id: int, msg_id: int, delay: int) -> Non
     except Exception:
         pass  # Already deleted or too old
 
-
 class _SendAdapter:
     """Lets render_folder send a NEW message instead of editing an existing one."""
     def __init__(self, client, chat_id: int):
@@ -65,13 +63,13 @@ class _SendAdapter:
     async def reply(self, text: str, **kwargs) -> None:
         await self._client.send_message(self._chat_id, text, **kwargs)
 
-
 async def _build_caption(file_doc, client=None) -> str:
     """Build a clean, organized caption with folder path and metadata."""
     # ── Folder breadcrumb path ──────────────────────────────────────────────
+
     if file_doc.folder_id:
         crumbs = await folder_service.get_breadcrumbs(file_doc.folder_id)
-        parts = ["🏠 Root"] + [f"📁 {c.name}" for c in crumbs]
+        parts = ["🏠 Root"] + [f"📁 {escape_markdown(c.name)}" for c in crumbs]
         folder_path = "  ›  ".join(parts)
     else:
         folder_path = "🏠 Root"
@@ -93,7 +91,7 @@ async def _build_caption(file_doc, client=None) -> str:
     lines = [
         f"📂 {folder_path}",
         "",
-        f"{file_doc.icon} **{file_doc.name}**",
+        f"{file_doc.icon} **{escape_markdown(file_doc.name)}**",
     ]
     if meta_line:
         lines.append(meta_line)
@@ -107,7 +105,6 @@ async def _build_caption(file_doc, client=None) -> str:
             "__Request again if you need it later.__",
         ]
     return "\n".join(lines)
-
 
 # ── Main handler ──────────────────────────────────────────────────────────────
 
@@ -179,7 +176,6 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
             delay = int(cfg.auto_delete_hours * 3600)
             asyncio.create_task(_auto_delete_msg(client, chat_id, sent.id, delay))
 
-
         # ── Bring nav menu back to the bottom ───────────────────────────────
         # Delete the old nav message (it's now above the file), then re-send
         # it below so the user always sees the menu at the bottom of the chat.
@@ -208,7 +204,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
             chat_id=chat_id,
             text=(
                 f"❌ **Playback Error**\n\n"
-                f"Could not deliver **{file_doc.name}**.\n"
+                f"Could not deliver **{escape_markdown(file_doc.name)}**.\n"
                 f"The CDN token may have expired. Please contact the administrator."
             ),
             parse_mode=ParseMode.MARKDOWN,
