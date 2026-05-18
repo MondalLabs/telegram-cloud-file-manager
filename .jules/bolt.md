@@ -1,0 +1,1 @@
+## 2024-05-18 - Concurrent MongoDB Queries for Navigation\n**Learning:** In Pyrogram+Beanie async setups, directory navigation reads (fetching folders and files separately) can double network latency if executed sequentially.\n**Action:** Use `asyncio.gather` to execute independent database read operations concurrently.
