@@ -17,6 +17,7 @@ then confirmed with confirm_revoke_kb(), then executed.
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import logging
 
@@ -39,7 +40,6 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 log = logging.getLogger(__name__)
 
-
 # ── Approve User FSM ──────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^ua$"))
@@ -58,7 +58,6 @@ async def approve_start(client, query: CallbackQuery, user: User) -> None:
         reply_markup=cancel_only_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 @bot.on_message(filters.text & filters.private & ~filters.command(["start", "cancel", "done"]), group=1)
 @owner_only
@@ -106,12 +105,11 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
 
     await message.reply(
         f"✅ **Access Granted**\n\n"
-        f"User **{approved.display_name}** (`{target_id}`) "
+        f"User **{escape_markdown(approved.display_name)}** (`{target_id}`) "
         f"has been approved and can now browse the library.",
         reply_markup=user_management_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ── List Approved Users (paginated) ──────────────────────────────────────────
 
@@ -176,7 +174,6 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
         parse_mode=ParseMode.MARKDOWN,
     )
 
-
 # ── Revoke User ───────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^ur:"))
@@ -205,7 +202,7 @@ async def revoke_user_callback(client, query: CallbackQuery, user: User) -> None
     try:
         await query.edit_message_text(
             f"🚫 **Revoke Access**\n\n"
-            f"User: **{target.display_name}**\n"
+            f"User: **{escape_markdown(target.display_name)}**\n"
             f"ID: `{target.telegram_id}`\n\n"
             f"This user will no longer be able to browse the library.",
             reply_markup=confirm_revoke_kb(user_doc_id, target.display_name),
@@ -216,7 +213,6 @@ async def revoke_user_callback(client, query: CallbackQuery, user: User) -> None
             pass  # Confirmation already showing — safe to ignore
         else:
             raise
-
 
 # Register the yes:ur: confirmation in confirm_kb — handled by admin_crud.py's
 # general yes: handler. But for revoke we need custom logic, so we handle it here.
@@ -238,7 +234,7 @@ async def revoke_confirmed(client, query: CallbackQuery, user: User) -> None:
 
     await query.edit_message_text(
         f"✅ **Access Revoked**\n\n"
-        f"**{target.display_name}** (`{target.telegram_id}`) "
+        f"**{escape_markdown(target.display_name)}** (`{target.telegram_id}`) "
         f"has been downgraded to Guest.",
         reply_markup=user_management_kb(),
         parse_mode=ParseMode.MARKDOWN,

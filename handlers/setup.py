@@ -32,7 +32,6 @@ from models.settings import BotSettings
 
 log = logging.getLogger(__name__)
 
-
 @bot.on_message(filters.command("setup") & filters.group)
 async def setup_dump_group(client, message: Message) -> None:
     """Register the current group as the Storage CDN dump group."""

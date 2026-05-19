@@ -27,6 +27,7 @@ files sent in other contexts.
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import asyncio
 import logging
@@ -47,7 +48,6 @@ from utils.callback_data import decode, ACTION_UPL
 
 log = logging.getLogger(__name__)
 
-
 # ── Start upload session ──────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^upl:"))
@@ -67,7 +67,7 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         if folder is None:
             await query.edit_message_text("❌ Folder not found.")
             return
-        display_name = folder.name
+        display_name = escape_markdown(folder.name)
         folder_id_stored = folder_id
 
     await fsm_service.set_state(
@@ -85,7 +85,6 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         parse_mode=ParseMode.MARKDOWN,
     )
 
-
 # ── Auto-delete helper ────────────────────────────────────────────────────────────────
 
 async def _auto_delete(client, chat_id: int, msg_id: int, delay: int = 8) -> None:
@@ -95,7 +94,6 @@ async def _auto_delete(client, chat_id: int, msg_id: int, delay: int = 8) -> Non
         await client.delete_messages(chat_id, msg_id)
     except Exception:
         pass  # Already deleted or too old
-
 
 # ── Per-file handler (fires when user is in upload state) ─────────────────────
 
@@ -135,8 +133,8 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
 
         await processing_msg.edit_text(
             f"✅ **Indexed** ({new_count})\n"
-            f"📄 {file_doc.name}\n"
-            f"__{file_doc.display_meta}__",
+            f"📄 {escape_markdown(file_doc.name)}\n"
+            f"__{escape_markdown(file_doc.display_meta)}__",
             parse_mode=ParseMode.MARKDOWN,
         )
         # Auto-delete the confirmation after 8s to keep the chat clean
@@ -154,7 +152,6 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
         log.error("Upload pipeline error: %s", e, exc_info=True)
         await processing_msg.edit_text(f"❌ Failed to index this file: {e}")
 
-
 # ── /done command ─────────────────────────────────────────────────────────────
 
 @bot.on_message(filters.command("done") & filters.private)
@@ -163,14 +160,12 @@ async def upload_done_command(client, message: Message, user: User) -> None:
     """Finalize the upload session."""
     await _finalize_upload(client, message, user)
 
-
 @bot.on_callback_query(filters.regex(r"^upload_done$"))
 @owner_only
 async def upload_done_callback(client, query: CallbackQuery, user: User) -> None:
     """Finalize the upload session from the keyboard button."""
     await query.answer()
     await _finalize_upload(client, query, user)
-
 
 async def _finalize_upload(client, update: Message | CallbackQuery, user: User) -> None:
     """Shared finalisation logic for /done and the ✅ Done button."""
