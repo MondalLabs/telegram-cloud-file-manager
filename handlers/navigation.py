@@ -21,6 +21,7 @@ from __future__ import annotations
 from utils.sanitize import escape_markdown
 
 import logging
+import asyncio
 from typing import Optional
 
 from pyrogram import filters
@@ -34,12 +35,20 @@ from keyboards.navigation_kb import build_folder_keyboard, build_empty_folder_ke
 from keyboards.admin_kb import folder_actions_kb, file_actions_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
-from utils.callback_data import decode, encode, ACTION_NAV, ACTION_BACK, ACTION_FOLDER_INFO, ACTION_FILE_INFO
+from utils.callback_data import (
+    decode,
+    encode,
+    ACTION_NAV,
+    ACTION_BACK,
+    ACTION_FOLDER_INFO,
+    ACTION_FILE_INFO,
+)
 from beanie import PydanticObjectId
 
 log = logging.getLogger(__name__)
 
 # ── Core shared render function ───────────────────────────────────────────────
+
 
 async def render_folder(
     client,
@@ -53,7 +62,7 @@ async def render_folder(
     Called from multiple handlers — this is the single source of truth
     for building the directory listing UI.
     """
-    is_admin = (user.role == UserRole.OWNER)
+    is_admin = user.role == UserRole.OWNER
 
     # Resolve parent_id for DB query
     if folder_id is None or folder_id == "root":
@@ -76,12 +85,15 @@ async def render_folder(
         crumbs = await folder_service.get_breadcrumbs(parent_id_obj)
         crumb_parts = ["🏠 Root"] + [f"📁 {escape_markdown(c.name)}" for c in crumbs]
         breadcrumb_text = "  ›  ".join(crumb_parts)
-        back_parent_id = str(current_folder.parent_id) if current_folder.parent_id else "root"
+        back_parent_id = (
+            str(current_folder.parent_id) if current_folder.parent_id else "root"
+        )
 
-    # Fetch contents
-    folders = await folder_service.get_children(parent_id_obj)
-    # Files at root level have folder_id = None — fetch them too
-    files = await file_service.get_files_in_folder(parent_id_obj)
+    # Fetch contents concurrently
+    folders, files = await asyncio.gather(
+        folder_service.get_children(parent_id_obj),
+        file_service.get_files_in_folder(parent_id_obj),
+    )
 
     # Build message text
     folder_count = len(folders)
@@ -116,13 +128,16 @@ async def render_folder(
     # Render
     if isinstance(update, CallbackQuery):
         try:
-            await update.edit_message_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+            await update.edit_message_text(
+                text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN
+            )
         except Exception:
             pass  # Message content unchanged — ignore "not modified" error
     else:
         await update.reply(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
 
 # ── nav:{folder_id}:{page} callback ──────────────────────────────────────────
+
 
 @bot.on_callback_query(filters.regex(r"^nav:"))
 @approved_and_above
@@ -137,6 +152,7 @@ async def nav_callback(client, query: CallbackQuery, user: User) -> None:
 
 # ── back:{parent_id} callback ─────────────────────────────────────────────────
 
+
 @bot.on_callback_query(filters.regex(r"^back:"))
 @approved_and_above
 async def back_callback(client, query: CallbackQuery, user: User) -> None:
@@ -148,12 +164,14 @@ async def back_callback(client, query: CallbackQuery, user: User) -> None:
 
 # ── noop callback (page indicator button) ─────────────────────────────────────
 
+
 @bot.on_callback_query(filters.regex(r"^noop$"))
 async def noop_callback(client, query: CallbackQuery) -> None:
     """Page indicator button — does nothing, just answers the callback."""
     await query.answer()
 
 # ── fi:{folder_id} — Folder action menu ──────────────────────────────────────
+
 
 @bot.on_callback_query(filters.regex(r"^fi:"))
 @owner_only
@@ -176,6 +194,7 @@ async def folder_info_callback(client, query: CallbackQuery, user: User) -> None
     )
 
 # ── fli:{file_id} — File action menu ─────────────────────────────────────────
+
 
 @bot.on_callback_query(filters.regex(r"^fli:"))
 @owner_only
