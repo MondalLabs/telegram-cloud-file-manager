@@ -1,12 +1,36 @@
-# ☁️ Telegram Cloud File Manager
+<div align="center">
+  <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=600&size=40&pause=1000&color=2196F3&center=true&vCenter=true&width=800&lines=%E2%98%81%EF%B8%8F+Telegram+Cloud+File+Manager;Robust+Virtual+File+System;Zero-Storage+Footprint;Enterprise-Grade+Security" alt="Typing SVG" />
 
-![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python)
-![Pyrogram](https://img.shields.io/badge/Pyrogram-2.3-blue?style=for-the-badge&logo=telegram)
-![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-Green?style=for-the-badge&logo=mongodb)
+  <br>
+
+  <p align="center">
+    <img src="https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python" alt="Python">
+    <img src="https://img.shields.io/badge/Pyrogram-2.3-blue?style=for-the-badge&logo=telegram" alt="Pyrogram">
+    <img src="https://img.shields.io/badge/MongoDB_Atlas-Green?style=for-the-badge&logo=mongodb" alt="MongoDB">
+    <img src="https://img.shields.io/github/license/MondalLabs/telegram-cloud-file-manager?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/github/repo-size/MondalLabs/telegram-cloud-file-manager?style=for-the-badge" alt="Repo Size">
+    <img src="https://img.shields.io/github/stars/MondalLabs/telegram-cloud-file-manager?style=for-the-badge" alt="Stars">
+  </p>
+</div>
 
 An ultra-robust, industrial-grade virtual file system and cloud storage manager operating entirely through a Telegram bot. 
 
 Instead of paying for AWS S3 or Google Cloud Storage, this bot utilizes **Telegram's native CDN** as a limitless backend to store files. It provides a beautiful, folder-based navigation UI inside Telegram to manage, organize, and securely share your files with authorized users.
+
+---
+
+## 📑 Table of Contents
+- [✨ Enterprise-Grade Features](#-enterprise-grade-features)
+- [🚀 Beginner-Friendly Setup Guide](#-beginner-friendly-setup-guide)
+  - [Step 1: Get Telegram API Credentials](#step-1-get-telegram-api-credentials)
+  - [Step 2: Create Your Bot](#step-2-create-your-bot)
+  - [Step 3: Setup MongoDB Database (Free)](#step-3-setup-mongodb-database-free)
+  - [Step 4: Get Your Telegram ID](#step-4-get-your-telegram-id)
+- [💻 Local Installation](#-local-installation)
+- [🛠️ The "Dump Group" Initialization](#️-the-dump-group-initialization)
+- [☁️ Free Hosting Deployment (Render)](#️-free-hosting-deployment-render)
+- [⚙️ Personalisation & Preferences](#️-personalisation--preferences)
+- [📱 Using the Bot](#-using-the-bot)
 
 ---
 
