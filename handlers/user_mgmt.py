@@ -30,7 +30,7 @@ from bot.client import bot
 from models.user import User, UserRole
 from middlewares.access_control import owner_only
 from keyboards.admin_kb import user_management_kb, admin_dashboard_kb
-from keyboards.confirm_kb import confirm_revoke_kb
+from keyboards.confirm_kb import confirm_revoke_kb, cancel_only_kb
 import services.user_service as user_service
 import services.fsm_service as fsm_service
 from utils.callback_data import decode, encode, ACTION_USR_LIST, ACTION_USR_REVOKE
@@ -54,7 +54,8 @@ async def approve_start(client, query: CallbackQuery, user: User) -> None:
     await query.edit_message_text(
         "✅ **Approve User**\n\n"
         "Send the Telegram ID of the user you want to approve.\n"
-        "Or /cancel to abort.",
+        "Or tap Cancel to abort.",
+        reply_markup=cancel_only_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
 
