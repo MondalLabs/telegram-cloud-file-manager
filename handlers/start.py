@@ -38,7 +38,7 @@ def _approved_kb() -> InlineKeyboardMarkup:
     ]])
 
 def _guest_text(telegram_id: int) -> str:
-    name_clause = f" to **{cfg.display_name}**" if cfg.display_name else ""
+    name_clause = f" to **{escape_markdown(cfg.display_name)}**" if cfg.display_name else ""
     return (
         "🔒 **Access Denied**\n\n"
         f"This bot is private and by-invitation only.\n\n"
@@ -60,7 +60,7 @@ async def start_command(client, message: Message, user: User) -> None:
             pass  # Already deleted, too old (>48h), or message not found
 
     if user.role == UserRole.OWNER:
-        name_line = f" — **{cfg.display_name}**" if cfg.display_name else ""
+        name_line = f" — **{escape_markdown(cfg.display_name)}**" if cfg.display_name else ""
         sent = await message.reply(
             f"👋 Welcome back, **{escape_markdown(user.display_name)}**!\n\n"
             f"🛠️ **Admin Dashboard**{name_line}",
@@ -69,7 +69,7 @@ async def start_command(client, message: Message, user: User) -> None:
         )
 
     elif user.role == UserRole.APPROVED:
-        name_line = f" to **{cfg.display_name}**" if cfg.display_name else ""
+        name_line = f" to **{escape_markdown(cfg.display_name)}**" if cfg.display_name else ""
         sent = await message.reply(
             f"👋 Hello, **{escape_markdown(user.display_name)}**! Welcome{name_line}.\n\n"
             "📚 Browse the library below.",
