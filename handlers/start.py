@@ -12,6 +12,7 @@ user to the main menu from anywhere in the navigation tree.
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import logging
 
@@ -28,7 +29,6 @@ from utils.callback_data import encode, ACTION_NAV
 
 log = logging.getLogger(__name__)
 
-
 def _approved_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(
@@ -36,7 +36,6 @@ def _approved_kb() -> InlineKeyboardMarkup:
             callback_data=encode(ACTION_NAV, "root", 1),
         )
     ]])
-
 
 def _guest_text(telegram_id: int) -> str:
     name_clause = f" to **{cfg.display_name}**" if cfg.display_name else ""
@@ -47,7 +46,6 @@ def _guest_text(telegram_id: int) -> str:
         f"`{telegram_id}`\n\n"
         f"Send this ID to the administrator to request access{name_clause}."
     )
-
 
 @bot.on_message(filters.command("start") & filters.private)
 @any_user
@@ -64,7 +62,7 @@ async def start_command(client, message: Message, user: User) -> None:
     if user.role == UserRole.OWNER:
         name_line = f" — **{cfg.display_name}**" if cfg.display_name else ""
         sent = await message.reply(
-            f"👋 Welcome back, **{user.display_name}**!\n\n"
+            f"👋 Welcome back, **{escape_markdown(user.display_name)}**!\n\n"
             f"🛠️ **Admin Dashboard**{name_line}",
             reply_markup=admin_dashboard_kb(),
             parse_mode=ParseMode.MARKDOWN,
@@ -73,7 +71,7 @@ async def start_command(client, message: Message, user: User) -> None:
     elif user.role == UserRole.APPROVED:
         name_line = f" to **{cfg.display_name}**" if cfg.display_name else ""
         sent = await message.reply(
-            f"👋 Hello, **{user.display_name}**! Welcome{name_line}.\n\n"
+            f"👋 Hello, **{escape_markdown(user.display_name)}**! Welcome{name_line}.\n\n"
             "📚 Browse the library below.",
             reply_markup=_approved_kb(),
             parse_mode=ParseMode.MARKDOWN,
@@ -89,7 +87,6 @@ async def start_command(client, message: Message, user: User) -> None:
     # Persist the new menu message ID so it survives server restarts
     await user.set({User.last_menu_id: sent.id})
 
-
 # ── Callback: return to dashboard from anywhere ───────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^dashboard$"))
@@ -103,7 +100,6 @@ async def dashboard_callback(client, query: CallbackQuery, user: User) -> None:
         parse_mode=ParseMode.MARKDOWN,
     )
 
-
 @bot.on_callback_query(filters.regex(r"^home$"))
 @any_user
 async def home_callback(client, query: CallbackQuery, user: User) -> None:
@@ -112,7 +108,6 @@ async def home_callback(client, query: CallbackQuery, user: User) -> None:
     # Re-trigger navigation to root — import here to avoid circular imports
     from handlers.navigation import render_folder
     await render_folder(client, query, folder_id=None, page=1, user=user)
-
 
 @bot.on_callback_query(filters.regex(r"^usrmenu$"))
 @owner_only

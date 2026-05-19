@@ -24,6 +24,7 @@ Callback patterns handled:
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import logging
 from typing import Optional
@@ -51,7 +52,6 @@ from utils.callback_data import (
 
 log = logging.getLogger(__name__)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: navigate back to a folder after an operation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +60,6 @@ async def _refresh_folder(client, update: Message | CallbackQuery, folder_id: Op
     """Refresh the folder listing view after a CRUD operation."""
     from handlers.navigation import render_folder
     await render_folder(client, update, folder_id=folder_id, page=1, user=user)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CANCEL — abort any active FSM
@@ -76,7 +75,6 @@ async def cancel_command(client, message: Message, user: User) -> None:
         reply_markup=admin_dashboard_kb(),
     )
 
-
 @bot.on_callback_query(filters.regex(r"^cancel$"))
 @owner_only
 async def cancel_callback(client, query: CallbackQuery, user: User) -> None:
@@ -87,7 +85,6 @@ async def cancel_callback(client, query: CallbackQuery, user: User) -> None:
         "❌ Operation cancelled.",
         reply_markup=admin_dashboard_kb(),
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CREATE FOLDER FSM
@@ -113,7 +110,6 @@ async def create_folder_start(client, query: CallbackQuery, user: User) -> None:
         parse_mode=ParseMode.MARKDOWN,
     )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # RENAME FOLDER FSM
 # ─────────────────────────────────────────────────────────────────────────────
@@ -132,6 +128,7 @@ async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
         return
 
     back_id = str(folder.parent_id) if folder.parent_id else "root"
+
     await fsm_service.set_state(
         user.telegram_id,
         state="rename_folder:waiting_name",
@@ -139,12 +136,11 @@ async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
     )
     await query.edit_message_text(
         f"✏️ **Rename Folder**\n\n"
-        f"Current name: **{folder.name}**\n\n"
+        f"Current name: **{escape_markdown(folder.name)}**\n\n"
         f"Send the new folder name.\n"
         f"Or /cancel to abort.",
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE FOLDER — show confirmation (stateless)
@@ -165,13 +161,12 @@ async def delete_folder_confirm(client, query: CallbackQuery, user: User) -> Non
 
     await query.edit_message_text(
         f"🗑️ **Delete Folder**\n\n"
-        f"📁 **{folder.name}**\n\n"
+        f"📁 **{escape_markdown(folder.name)}**\n\n"
         f"⚠️ This will permanently delete this folder AND all its "
         f"sub-folders and files. This cannot be undone.",
         reply_markup=confirm_delete_kb(ACTION_DF, folder_id, label="Delete"),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RENAME FILE FSM
@@ -197,12 +192,11 @@ async def rename_file_start(client, query: CallbackQuery, user: User) -> None:
     )
     await query.edit_message_text(
         f"✏️ **Rename File**\n\n"
-        f"Current name: **{file_doc.name}**\n\n"
+        f"Current name: **{escape_markdown(file_doc.name)}**\n\n"
         f"Send the new file name.\n"
         f"Or /cancel to abort.",
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE FILE — show confirmation (stateless)
@@ -223,14 +217,13 @@ async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
 
     await query.edit_message_text(
         f"🗑️ **Delete File**\n\n"
-        f"🎬 **{file_doc.name}**\n"
-        f"__{file_doc.display_meta}__\n\n"
+        f"🎬 **{escape_markdown(file_doc.name)}**\n"
+        f"__{escape_markdown(file_doc.display_meta)}__\n\n"
         f"⚠️ This will remove the file from the library. "
         f"The video remains in the CDN but will be inaccessible.",
         reply_markup=confirm_delete_kb(ACTION_DEL_FILE, file_doc_id, label="Delete"),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # YES:{action}:{target_id} — execute confirmed destructive action
@@ -286,7 +279,7 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
         await _user_svc.revoke_user(target.telegram_id)
         await query.edit_message_text(
             f"✅ **Access Revoked**\n\n"
-            f"**{target.display_name}** (`{target.telegram_id}`) "
+            f"**{escape_markdown(target.display_name)}** (`{target.telegram_id}`) "
             f"has been downgraded to Guest.",
             reply_markup=_umgmt_kb(),
             parse_mode=ParseMode.MARKDOWN,
@@ -294,7 +287,6 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     else:
         await query.edit_message_text("❌ Unknown action.", reply_markup=admin_dashboard_kb())
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FSM TEXT ROUTER — processes name inputs for active FSM states
@@ -325,7 +317,6 @@ async def fsm_text_router(client, message: Message, user: User) -> None:
             reply_markup=admin_dashboard_kb(),
         )
 
-
 async def _handle_create_folder(client, message: Message, user: User, data: dict) -> None:
     """Process the folder name input for the Create Folder FSM."""
     name = message.text.strip()
@@ -339,11 +330,10 @@ async def _handle_create_folder(client, message: Message, user: User, data: dict
             created_by=user.telegram_id,
         )
         await fsm_service.clear_state(user.telegram_id)
-        await message.reply(f"✅ Folder **{folder.name}** created.", parse_mode=ParseMode.MARKDOWN)
+        await message.reply(f"✅ Folder **{escape_markdown(folder.name)}** created.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=parent_id_str, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {e}\n\nSend a different name or /cancel to abort.")
-
+        await message.reply(f"⚠️ {escape_markdown(str(e))}\n\nSend a different name or /cancel to abort.")
 
 async def _handle_rename_folder(client, message: Message, user: User, data: dict) -> None:
     """Process the new name input for the Rename Folder FSM."""
@@ -354,11 +344,10 @@ async def _handle_rename_folder(client, message: Message, user: User, data: dict
     try:
         folder = await folder_service.rename_folder(PydanticObjectId(folder_id), new_name)
         await fsm_service.clear_state(user.telegram_id)
-        await message.reply(f"✅ Renamed to **{folder.name}**.", parse_mode=ParseMode.MARKDOWN)
+        await message.reply(f"✅ Renamed to **{escape_markdown(folder.name)}**.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=back_folder_id, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {e}\n\nSend a different name or /cancel to abort.")
-
+        await message.reply(f"⚠️ {escape_markdown(str(e))}\n\nSend a different name or /cancel to abort.")
 
 async def _handle_rename_file(client, message: Message, user: User, data: dict) -> None:
     """Process the new name input for the Rename File FSM."""
@@ -369,7 +358,7 @@ async def _handle_rename_file(client, message: Message, user: User, data: dict) 
     file_doc = await file_service.rename_file(PydanticObjectId(file_doc_id), new_name)
     await fsm_service.clear_state(user.telegram_id)
     if file_doc:
-        await message.reply(f"✅ Renamed to **{file_doc.name}**.", parse_mode=ParseMode.MARKDOWN)
+        await message.reply(f"✅ Renamed to **{escape_markdown(file_doc.name)}**.", parse_mode=ParseMode.MARKDOWN)
     else:
         await message.reply("❌ File not found.")
     await _refresh_folder(client, message, folder_id=folder_id, user=user)

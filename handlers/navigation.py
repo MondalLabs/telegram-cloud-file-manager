@@ -18,6 +18,7 @@ Breadcrumb format in the header message:
 """
 
 from __future__ import annotations
+from utils.sanitize import escape_markdown
 
 import logging
 from typing import Optional
@@ -37,7 +38,6 @@ from utils.callback_data import decode, encode, ACTION_NAV, ACTION_BACK, ACTION_
 from beanie import PydanticObjectId
 
 log = logging.getLogger(__name__)
-
 
 # ── Core shared render function ───────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ async def render_folder(
                 await update.answer("❌ Folder not found.", show_alert=True)
             return
         crumbs = await folder_service.get_breadcrumbs(parent_id_obj)
-        crumb_parts = ["🏠 Root"] + [f"📁 {c.name}" for c in crumbs]
+        crumb_parts = ["🏠 Root"] + [f"📁 {escape_markdown(c.name)}" for c in crumbs]
         breadcrumb_text = "  ›  ".join(crumb_parts)
         back_parent_id = str(current_folder.parent_id) if current_folder.parent_id else "root"
 
@@ -122,7 +122,6 @@ async def render_folder(
     else:
         await update.reply(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
 
-
 # ── nav:{folder_id}:{page} callback ──────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^nav:"))
@@ -136,7 +135,6 @@ async def nav_callback(client, query: CallbackQuery, user: User) -> None:
     page = int(parts[2]) if len(parts) > 2 else 1
     await render_folder(client, query, folder_id=folder_id, page=page, user=user)
 
-
 # ── back:{parent_id} callback ─────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^back:"))
@@ -148,14 +146,12 @@ async def back_callback(client, query: CallbackQuery, user: User) -> None:
     parent_id = parts[1] if len(parts) > 1 else "root"
     await render_folder(client, query, folder_id=parent_id, page=1, user=user)
 
-
 # ── noop callback (page indicator button) ─────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^noop$"))
 async def noop_callback(client, query: CallbackQuery) -> None:
     """Page indicator button — does nothing, just answers the callback."""
     await query.answer()
-
 
 # ── fi:{folder_id} — Folder action menu ──────────────────────────────────────
 
@@ -174,11 +170,10 @@ async def folder_info_callback(client, query: CallbackQuery, user: User) -> None
 
     parent_id_str = str(folder.parent_id) if folder.parent_id else "root"
     await query.edit_message_text(
-        f"⚙️ **Folder Actions**\n\n📁 {folder.name}",
+        f"⚙️ **Folder Actions**\n\n📁 {escape_markdown(folder.name)}",
         reply_markup=folder_actions_kb(folder_id, parent_id_str),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 # ── fli:{file_id} — File action menu ─────────────────────────────────────────
 
@@ -196,7 +191,7 @@ async def file_info_callback(client, query: CallbackQuery, user: User) -> None:
         return
 
     await query.edit_message_text(
-        f"⚙️ **File Actions**\n\n🎬 {file_doc.name}\n__{file_doc.display_meta}__",
+        f"⚙️ **File Actions**\n\n🎬 {escape_markdown(file_doc.name)}\n__{escape_markdown(file_doc.display_meta)}__",
         reply_markup=file_actions_kb(file_doc_id, str(file_doc.folder_id)),
         parse_mode=ParseMode.MARKDOWN,
     )

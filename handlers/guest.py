@@ -21,7 +21,6 @@ from bot.client import bot
 from models.user import User, UserRole
 import services.user_service as user_service
 
-
 def _access_denied_text(telegram_id: int) -> str:
     return (
         "🔒 **Access Denied**\n\n"
@@ -30,7 +29,6 @@ def _access_denied_text(telegram_id: int) -> str:
         f"`{telegram_id}`\n\n"
         "Send this ID to the administrator to request access."
     )
-
 
 @bot.on_message(filters.private & ~filters.command(["start", "cancel", "done"]))
 async def guest_message_handler(client, message: Message) -> None:
@@ -53,7 +51,6 @@ async def guest_message_handler(client, message: Message) -> None:
             _access_denied_text(user.telegram_id),
             parse_mode=ParseMode.MARKDOWN,
         )
-
 
 @bot.on_callback_query(filters.regex(r"^guest_"))
 async def guest_callback_handler(client, query: CallbackQuery) -> None:
