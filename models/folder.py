@@ -29,11 +29,10 @@ class Folder(Document):
     class Settings:
         name = "folders"
         indexes = [
-            # Fast O(1) children lookup — used on every directory browse
-            IndexModel([("parent_id", ASCENDING)]),
-            # Enforce unique folder names within the same parent
+            # Fast O(1) children lookup AND sort — used on every directory browse
+            # Enforces unique folder names within the same parent
             IndexModel(
-                [("name", ASCENDING), ("parent_id", ASCENDING)],
+                [("parent_id", ASCENDING), ("name", ASCENDING)],
                 unique=True,
                 name="unique_sibling_name",
             ),

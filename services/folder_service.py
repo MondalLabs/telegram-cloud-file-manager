@@ -24,8 +24,8 @@ from models.file import File
 
 
 async def get_children(parent_id: Optional[PydanticObjectId]) -> list[Folder]:
-    """Return all immediate child folders of the given parent (or root if None)."""
-    return await Folder.find(Folder.parent_id == parent_id).to_list()
+    """Return all immediate child folders of the given parent (or root if None), sorted by name."""
+    return await Folder.find(Folder.parent_id == parent_id).sort(+Folder.name).to_list()
 
 
 async def get_folder(folder_id: PydanticObjectId) -> Optional[Folder]:
