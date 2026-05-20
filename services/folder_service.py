@@ -28,6 +28,24 @@ async def get_children(parent_id: Optional[PydanticObjectId]) -> list[Folder]:
     return await Folder.find(Folder.parent_id == parent_id).sort(+Folder.name).to_list()
 
 
+async def count_children(parent_id: Optional[PydanticObjectId]) -> int:
+    """Return the total count of immediate child folders of the given parent."""
+    return await Folder.find(Folder.parent_id == parent_id).count()
+
+
+async def get_children_paginated(
+    parent_id: Optional[PydanticObjectId], skip: int, limit: int
+) -> list[Folder]:
+    """Return a paginated slice of immediate child folders of the given parent, sorted by name."""
+    return (
+        await Folder.find(Folder.parent_id == parent_id)
+        .sort(+Folder.name)
+        .skip(skip)
+        .limit(limit)
+        .to_list()
+    )
+
+
 async def get_folder(folder_id: PydanticObjectId) -> Optional[Folder]:
     """Fetch a single folder by its _id."""
     return await Folder.get(folder_id)

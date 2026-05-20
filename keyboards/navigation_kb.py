@@ -66,9 +66,7 @@ def _file_info_button(file: File) -> InlineKeyboardButton:
 
 
 def build_folder_keyboard(
-    folders: list[Folder],
-    files: list[File],
-    page: int,
+    pg: Page[tuple[str, Folder | File]],
     current_id: str,        # The folder being VIEWED (used for New Folder / Upload / pagination)
     back_id: Optional[str], # The parent folder (used for Back button; None = at root)
     is_admin: bool,
@@ -77,20 +75,11 @@ def build_folder_keyboard(
     Build the paginated directory listing keyboard.
 
     Args:
-        folders:    All immediate child folders of the current directory.
-        files:      All files in the current directory.
-        page:       Current 1-indexed page number.
+        pg:         A Page object containing the slice of folders and files to display.
         current_id: The _id of the folder being viewed ("root" if at root).
         back_id:    The _id of the parent folder (None if already at root).
         is_admin:   Render admin action buttons (⚙️, ➕, 📤) if True.
     """
-    combined: list[tuple[str, Folder | File]] = (
-        [("folder", f) for f in folders] +
-        [("file", f) for f in files]
-    )
-
-    pg: Page = paginate(combined, page, cfg.items_per_page)
-
     rows: list[list[InlineKeyboardButton]] = []
 
     for kind, item in pg.items:
