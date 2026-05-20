@@ -94,9 +94,20 @@ async def revoke_user(telegram_id: int) -> Optional[User]:
     return user
 
 
-async def list_approved() -> list[User]:
-    """Return all currently approved (non-owner) users, sorted by name."""
-    return await User.find(User.role == UserRole.APPROVED).to_list()
+async def count_approved() -> int:
+    """Return the total number of approved users."""
+    return await User.find(User.role == UserRole.APPROVED).count()
+
+
+async def list_approved_paginated(skip: int, limit: int) -> list[User]:
+    """Return a paginated list of approved (non-owner) users."""
+    # ⚡ Bolt Optimization: Use skip/limit with a stable sort at the DB level to
+    # prevent fetching large collections into memory just to display a paginated slice.
+    return await User.find(
+        User.role == UserRole.APPROVED
+    ).sort(
+        +User.telegram_id
+    ).skip(skip).limit(limit).to_list()
 
 
 async def find_user_by_id(telegram_id: int) -> Optional[User]:

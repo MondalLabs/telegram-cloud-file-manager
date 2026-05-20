@@ -34,7 +34,7 @@ from keyboards.confirm_kb import confirm_revoke_kb, cancel_only_kb
 import services.user_service as user_service
 import services.fsm_service as fsm_service
 from utils.callback_data import decode, encode, ACTION_USR_LIST, ACTION_USR_REVOKE
-from utils.pagination import paginate
+from utils.pagination import Page
 from bot.config import settings as cfg
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -132,9 +132,9 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
     parts = decode(query.data)
     page = int(parts[1]) if len(parts) > 1 else 1
 
-    approved = await user_service.list_approved()
+    total_items = await user_service.count_approved()
 
-    if not approved:
+    if total_items == 0:
         await query.edit_message_text(
             "📋 **Approved Users**\n\nNo approved users yet.\nTap ✅ Approve User to grant access.",
             reply_markup=user_management_kb(),
@@ -142,7 +142,19 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
         )
         return
 
-    pg = paginate(approved, page, cfg.items_per_page)
+    per_page = cfg.items_per_page
+    total_pages = max(1, (total_items + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+
+    skip = (page - 1) * per_page
+    approved = await user_service.list_approved_paginated(skip, per_page)
+
+    pg = Page(
+        items=approved,
+        page=page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
 
     # Build user list rows — each user gets a Revoke button
     rows = []
