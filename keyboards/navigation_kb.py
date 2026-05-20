@@ -113,6 +113,8 @@ def build_folder_keyboard(
                 text="◀️",
                 callback_data=encode(ACTION_NAV, current_id, pg.prev_page),
             ))
+        else:
+            nav_row.append(InlineKeyboardButton(text="·", callback_data="noop"))
 
         nav_row.append(InlineKeyboardButton(
             text=f"{pg.page} / {pg.total_pages}",
@@ -124,6 +126,8 @@ def build_folder_keyboard(
                 text="▶️",
                 callback_data=encode(ACTION_NAV, current_id, pg.next_page),
             ))
+        else:
+            nav_row.append(InlineKeyboardButton(text="·", callback_data="noop"))
 
         rows.append(nav_row)
 
