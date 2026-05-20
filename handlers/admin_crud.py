@@ -337,7 +337,8 @@ async def _handle_create_folder(client, message: Message, user: User, data: dict
         await message.reply(f"✅ Folder **{escape_markdown(folder.name)}** created.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=parent_id_str, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {escape_markdown(str(e))}\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
+        log.error("Create folder error: %s", e)
+        await message.reply("⚠️ Invalid folder name.\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
 
 
 async def _handle_rename_folder(client, message: Message, user: User, data: dict) -> None:
@@ -352,7 +353,8 @@ async def _handle_rename_folder(client, message: Message, user: User, data: dict
         await message.reply(f"✅ Renamed to **{escape_markdown(folder.name)}**.", parse_mode=ParseMode.MARKDOWN)
         await _refresh_folder(client, message, folder_id=back_folder_id, user=user)
     except ValueError as e:
-        await message.reply(f"⚠️ {escape_markdown(str(e))}\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
+        log.error("Rename folder error: %s", e)
+        await message.reply("⚠️ Invalid folder name.\n\nSend a different name or tap Cancel to abort.", reply_markup=cancel_only_kb())
 
 
 async def _handle_rename_file(client, message: Message, user: User, data: dict) -> None:
