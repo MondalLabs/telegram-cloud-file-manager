@@ -43,6 +43,8 @@ from utils.callback_data import (
     ACTION_FOLDER_INFO,
     ACTION_FILE_INFO,
 )
+from utils.pagination import Page
+from bot.config import settings as cfg
 from beanie import PydanticObjectId
 
 log = logging.getLogger(__name__)
@@ -89,15 +91,13 @@ async def render_folder(
             str(current_folder.parent_id) if current_folder.parent_id else "root"
         )
 
-    # Fetch contents concurrently
-    folders, files = await asyncio.gather(
-        folder_service.get_children(parent_id_obj),
-        file_service.get_files_in_folder(parent_id_obj),
+    # Fetch counts concurrently
+    folder_count, file_count = await asyncio.gather(
+        folder_service.count_children(parent_id_obj),
+        file_service.count_files_in_folder(parent_id_obj),
     )
 
     # Build message text
-    folder_count = len(folders)
-    file_count = len(files)
     text = (
         f"{breadcrumb_text}\n\n"
         f"📁 {folder_count} folder{'s' if folder_count != 1 else ''}  "
@@ -119,10 +119,51 @@ async def render_folder(
         else:
             text += "\n\n_This folder is empty._"
     else:
-        keyboard = build_folder_keyboard(
-            folders=folders,
-            files=files,
+        # Calculate pagination boundaries across both collections sequentially
+        total_items = folder_count + file_count
+        per_page = cfg.items_per_page
+        total_pages = max(1, (total_items + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+
+        start = (page - 1) * per_page
+        end = start + per_page
+
+        folders_to_skip = min(start, folder_count)
+        folders_to_fetch = min(end - start, max(0, folder_count - start))
+
+        files_start = max(0, start - folder_count)
+        files_to_skip = min(files_start, file_count)
+        files_to_fetch = min(per_page - folders_to_fetch, max(0, file_count - files_start))
+
+        # Fetch only the required page items concurrently
+        fetch_tasks = []
+        if folders_to_fetch > 0:
+            fetch_tasks.append(
+                folder_service.get_children_paginated(parent_id_obj, folders_to_skip, folders_to_fetch)
+            )
+        else:
+            fetch_tasks.append(asyncio.sleep(0, result=[]))
+
+        if files_to_fetch > 0:
+            fetch_tasks.append(
+                file_service.get_files_in_folder_paginated(parent_id_obj, files_to_skip, files_to_fetch)
+            )
+        else:
+            fetch_tasks.append(asyncio.sleep(0, result=[]))
+
+        page_folders, page_files = await asyncio.gather(*fetch_tasks)
+
+        combined_items = [("folder", f) for f in page_folders] + [("file", f) for f in page_files]
+
+        pg = Page(
+            items=combined_items,
             page=page,
+            total_pages=total_pages,
+            total_items=total_items,
+        )
+
+        keyboard = build_folder_keyboard(
+            pg=pg,
             current_id=current_id,
             back_id=back_parent_id,
             is_admin=is_admin,

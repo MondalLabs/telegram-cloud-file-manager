@@ -35,6 +35,24 @@ async def get_files_in_folder(folder_id: Optional[PydanticObjectId]) -> list[Fil
     ).sort(+File.name).to_list()
 
 
+async def count_files_in_folder(folder_id: Optional[PydanticObjectId]) -> int:
+    """Return the total count of files in a folder."""
+    return await File.find(File.folder_id == folder_id).count()
+
+
+async def get_files_in_folder_paginated(
+    folder_id: Optional[PydanticObjectId], skip: int, limit: int
+) -> list[File]:
+    """Return a paginated slice of files in a folder, ordered by name ascending."""
+    return (
+        await File.find(File.folder_id == folder_id)
+        .sort(+File.name)
+        .skip(skip)
+        .limit(limit)
+        .to_list()
+    )
+
+
 async def get_file(file_doc_id: PydanticObjectId) -> Optional[File]:
     """Fetch a single File document by its MongoDB _id."""
     return await File.get(file_doc_id)
