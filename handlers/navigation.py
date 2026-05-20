@@ -114,7 +114,10 @@ async def render_folder(
             back_id=back_parent_id,
             is_admin=is_admin,
         )
-        text += "\n\n_This folder is empty._"
+        if is_admin:
+            text += "\n\n_This folder is empty. Tap ➕ New Folder or 📤 Upload below to add content._"
+        else:
+            text += "\n\n_This folder is empty._"
     else:
         keyboard = build_folder_keyboard(
             folders=folders,

@@ -125,7 +125,7 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
 
     if not approved:
         await query.edit_message_text(
-            "📋 **Approved Users**\n\nNo approved users yet.",
+            "📋 **Approved Users**\n\nNo approved users yet.\nTap ✅ Approve User to grant access.",
             reply_markup=user_management_kb(),
             parse_mode=ParseMode.MARKDOWN,
         )
