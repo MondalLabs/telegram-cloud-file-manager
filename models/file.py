@@ -45,8 +45,8 @@ class File(Document):
     class Settings:
         name = "files"
         indexes = [
-            # Fast O(1) folder content lookup — used on every directory browse
-            IndexModel([("folder_id", ASCENDING)]),
+            # Fast O(1) folder content lookup and sort — used on every directory browse
+            IndexModel([("folder_id", ASCENDING), ("name", ASCENDING)]),
         ]
 
     def __repr__(self) -> str:
