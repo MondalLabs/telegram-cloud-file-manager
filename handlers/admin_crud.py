@@ -252,10 +252,11 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
                 f"Removed {result['folders_deleted']} folder(s) and "
                 f"{result['files_deleted']} file(s).",
                 reply_markup=admin_dashboard_kb(),
+                parse_mode=ParseMode.MARKDOWN,
             )
         except Exception as e:
             log.error("delete_folder_tree error: %s", e)
-            await query.edit_message_text(f"❌ Error: {e}", reply_markup=admin_dashboard_kb())
+            await query.edit_message_text("❌ Internal Error: Could not delete folder tree.", reply_markup=admin_dashboard_kb())
 
     elif action == ACTION_DEL_FILE:
         # Delete single file
