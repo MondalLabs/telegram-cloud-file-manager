@@ -145,12 +145,13 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
         await processing_msg.edit_text(
             f"❌ **Error:** {e}\n\n"
             f"Please run /setup in your dump group first.",
+            parse_mode=ParseMode.MARKDOWN,
         )
         await fsm_service.clear_state(user.telegram_id)
 
     except Exception as e:
         log.error("Upload pipeline error: %s", e, exc_info=True)
-        await processing_msg.edit_text(f"❌ Failed to index this file: {e}")
+        await processing_msg.edit_text("❌ Failed to index this file due to an internal error.")
 
 # ── /done command ─────────────────────────────────────────────────────────────
 
