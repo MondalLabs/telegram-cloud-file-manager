@@ -76,11 +76,17 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
     try:
         target_id = int(raw)
     except ValueError:
-        await message.reply("⚠️ That doesn't look like a valid Telegram ID. Send a number.")
+        await message.reply(
+            "⚠️ That doesn't look like a valid Telegram ID. Send a number.\n\nOr tap Cancel to abort.",
+            reply_markup=cancel_only_kb()
+        )
         return
 
     if target_id == cfg.owner_id:
-        await message.reply("⚠️ You can't approve/modify the owner account.")
+        await message.reply(
+            "⚠️ You can't approve/modify the owner account.\n\nOr tap Cancel to abort.",
+            reply_markup=cancel_only_kb()
+        )
         return
 
     # ── Validate: user must have messaged the bot first ────────────────────────
@@ -89,16 +95,20 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
         await message.reply(
             f"⚠️ **User not found**\n\n"
             f"No user with ID `{target_id}` has ever messaged this bot.\n"
-            f"They must send /start to the bot first before you can approve them.",
+            f"They must send /start to the bot first before you can approve them.\n\n"
+            f"Or tap Cancel to abort.",
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=cancel_only_kb()
         )
         return
 
     try:
         approved = await user_service.approve_user(target_id, approved_by=user.telegram_id)
     except ValueError as e:
-        await message.reply(f"⚠️ {e}")
-        await fsm_service.clear_state(user.telegram_id)
+        await message.reply(
+            f"⚠️ {e}\n\nOr tap Cancel to abort.",
+            reply_markup=cancel_only_kb()
+        )
         return
 
     await fsm_service.clear_state(user.telegram_id)
