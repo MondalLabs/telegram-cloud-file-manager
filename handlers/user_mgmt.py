@@ -105,8 +105,9 @@ async def approve_user_id_input(client, message: Message, user: User) -> None:
     try:
         approved = await user_service.approve_user(target_id, approved_by=user.telegram_id)
     except ValueError as e:
+        log.error("Approve user error: %s", e)
         await message.reply(
-            f"⚠️ {e}\n\nOr tap Cancel to abort.",
+            "⚠️ Failed to approve user.\n\nOr tap Cancel to abort.",
             reply_markup=cancel_only_kb()
         )
         return
