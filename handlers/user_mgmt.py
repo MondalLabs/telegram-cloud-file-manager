@@ -166,6 +166,8 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
             nav.append(InlineKeyboardButton(
                 text="◀️", callback_data=encode(ACTION_USR_LIST, pg.prev_page)
             ))
+        else:
+            nav.append(InlineKeyboardButton(text="·", callback_data="noop"))
         nav.append(InlineKeyboardButton(
             text=f"{pg.page}/{pg.total_pages}", callback_data="noop"
         ))
@@ -173,6 +175,8 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
             nav.append(InlineKeyboardButton(
                 text="▶️", callback_data=encode(ACTION_USR_LIST, pg.next_page)
             ))
+        else:
+            nav.append(InlineKeyboardButton(text="·", callback_data="noop"))
         rows.append(nav)
 
     rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="usrmenu")])
