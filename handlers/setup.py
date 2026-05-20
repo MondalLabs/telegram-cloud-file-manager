@@ -29,6 +29,7 @@ from pyrogram.types import Message
 from bot.client import bot
 from bot.config import settings as cfg
 from models.settings import BotSettings
+from utils.sanitize import escape_markdown
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ async def setup_dump_group(client, message: Message) -> None:
 
     await message.reply(
         f"✅ **Storage CDN Configured**\n\n"
-        f"Group: **{chat_title}**\n"
+        f"Group: **{escape_markdown(chat_title)}**\n"
         f"Chat ID: `{chat_id}`\n\n"
         f"All uploaded videos will now be routed to this group for permanent storage.\n"
         f"⚠️ **Never delete messages from this group** — they are the CDN tokens.",

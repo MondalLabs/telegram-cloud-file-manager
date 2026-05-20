@@ -38,6 +38,7 @@ from pyrogram.types import Message, CallbackQuery
 from models.user import User, UserRole
 import services.user_service as user_service
 from bot.config import settings as cfg
+from utils.sanitize import escape_markdown
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def _extract_from_user(update: Message | CallbackQuery):
 async def _send_denial(update: Message | CallbackQuery, user: User) -> None:
     """Send the appropriate access-denied message for the user's context."""
     if user.role == UserRole.GUEST:
-        name_clause = f" to **{cfg.display_name}**" if cfg.display_name else ""
+        name_clause = f" to **{escape_markdown(cfg.display_name)}**" if cfg.display_name else ""
         text = (
             "🔒 **Access Denied**\n\n"
             "This bot is private. Your Telegram ID is:\n"
