@@ -69,22 +69,81 @@ async def _refresh_folder(client, update: Message | CallbackQuery, folder_id: Op
 @owner_only
 async def cancel_command(client, message: Message, user: User) -> None:
     """Abort the active FSM workflow."""
+    state, data = await fsm_service.get_state_and_data(user.telegram_id)
     await fsm_service.clear_state(user.telegram_id)
-    await message.reply(
-        "❌ Operation cancelled.",
-        reply_markup=admin_dashboard_kb(),
-    )
+
+    folder_id = None
+    has_context = False
+
+    if data:
+        if "parent_id" in data:
+            folder_id = data.get("parent_id")
+            has_context = True
+        elif "back_folder_id" in data:
+            folder_id = data.get("back_folder_id")
+            has_context = True
+        elif "folder_id" in data:
+            folder_id = data.get("folder_id")
+            has_context = True
+        elif data.get("from_menu") == "usrmenu":
+            from keyboards.admin_kb import user_management_kb
+            await message.reply(
+                "❌ Operation cancelled.\n\n👤 **User Management**\n\nManage user access to the library.",
+                reply_markup=user_management_kb(),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+    if has_context:
+        await message.reply("❌ Operation cancelled.")
+        from handlers.navigation import render_folder
+        await render_folder(client, message, folder_id=str(folder_id) if folder_id else "root", page=1, user=user)
+    else:
+        await message.reply(
+            "❌ Operation cancelled.",
+            reply_markup=admin_dashboard_kb(),
+        )
 
 @bot.on_callback_query(filters.regex(r"^cancel$"))
 @owner_only
 async def cancel_callback(client, query: CallbackQuery, user: User) -> None:
-    """Abort the active FSM workflow from a button."""
-    await query.answer("Cancelled.")
+    """Abort the active FSM workflow via inline button."""
+    state, data = await fsm_service.get_state_and_data(user.telegram_id)
     await fsm_service.clear_state(user.telegram_id)
-    await query.edit_message_text(
-        "❌ Operation cancelled.",
-        reply_markup=admin_dashboard_kb(),
-    )
+
+    folder_id = None
+    has_context = False
+
+    if data:
+        if "parent_id" in data:
+            folder_id = data.get("parent_id")
+            has_context = True
+        elif "back_folder_id" in data:
+            folder_id = data.get("back_folder_id")
+            has_context = True
+        elif "folder_id" in data:
+            folder_id = data.get("folder_id")
+            has_context = True
+        elif data.get("from_menu") == "usrmenu":
+            await query.answer("Operation cancelled.")
+            from keyboards.admin_kb import user_management_kb
+            await query.edit_message_text(
+                "👤 **User Management**\n\nManage user access to the library.",
+                reply_markup=user_management_kb(),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+    if has_context:
+        await query.answer("Operation cancelled.")
+        from handlers.navigation import render_folder
+        await render_folder(client, query, folder_id=str(folder_id) if folder_id else "root", page=1, user=user)
+    else:
+        await query.answer()
+        await query.edit_message_text(
+            "❌ Operation cancelled.",
+            reply_markup=admin_dashboard_kb(),
+        )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CREATE FOLDER FSM
@@ -161,12 +220,15 @@ async def delete_folder_confirm(client, query: CallbackQuery, user: User) -> Non
         await query.answer("❌ Folder not found.", show_alert=True)
         return
 
+    parent_id = str(folder.parent_id) if folder.parent_id else "root"
+    cancel_data = encode(ACTION_NAV, parent_id, 1)
+
     await query.edit_message_text(
         f"🗑️ **Delete Folder**\n\n"
         f"📁 **{escape_markdown(folder.name)}**\n\n"
         f"⚠️ This will permanently delete this folder AND all its "
         f"sub-folders and files. This cannot be undone.",
-        reply_markup=confirm_delete_kb(ACTION_DF, folder_id, label="Delete"),
+        reply_markup=confirm_delete_kb(ACTION_DF, folder_id, cancel_data=cancel_data, label="Delete"),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -218,13 +280,16 @@ async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
         await query.answer("❌ File not found.", show_alert=True)
         return
 
+    folder_id = str(file_doc.folder_id) if file_doc.folder_id else "root"
+    cancel_data = encode(ACTION_NAV, folder_id, 1)
+
     await query.edit_message_text(
         f"🗑️ **Delete File**\n\n"
         f"🎬 **{escape_markdown(file_doc.name)}**\n"
         f"__{escape_markdown(file_doc.display_meta)}__\n\n"
         f"⚠️ This will remove the file from the library. "
         f"The video remains in the CDN but will be inaccessible.",
-        reply_markup=confirm_delete_kb(ACTION_DEL_FILE, file_doc_id, label="Delete"),
+        reply_markup=confirm_delete_kb(ACTION_DEL_FILE, file_doc_id, cancel_data=cancel_data, label="Delete"),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -245,32 +310,28 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     if action == ACTION_DF:
         # Delete folder tree
+        folder = await folder_service.get_folder(PydanticObjectId(target_id))
+        parent_id = str(folder.parent_id) if folder and folder.parent_id else "root"
         try:
             result = await folder_service.delete_folder_tree(PydanticObjectId(target_id))
-            await query.edit_message_text(
-                f"✅ **Deleted**\n\n"
-                f"Removed {result['folders_deleted']} folder(s) and "
-                f"{result['files_deleted']} file(s).",
-                reply_markup=admin_dashboard_kb(),
-                parse_mode=ParseMode.MARKDOWN,
-            )
+            await query.answer(f"Deleted {result['folders_deleted']} folders and {result['files_deleted']} files.")
+            from handlers.navigation import render_folder
+            await render_folder(client, query, folder_id=parent_id, page=1, user=user)
         except Exception as e:
             log.error("delete_folder_tree error: %s", e)
             await query.edit_message_text("❌ Internal Error: Could not delete folder tree.", reply_markup=admin_dashboard_kb())
 
     elif action == ACTION_DEL_FILE:
         # Delete single file
+        file_doc = await file_service.get_file(PydanticObjectId(target_id))
+        folder_id = str(file_doc.folder_id) if file_doc and file_doc.folder_id else "root"
         success = await file_service.delete_file(PydanticObjectId(target_id))
         if success:
-            await query.edit_message_text(
-                "✅ File deleted successfully.",
-                reply_markup=admin_dashboard_kb(),
-            )
+            await query.answer("File deleted successfully.")
         else:
-            await query.edit_message_text(
-                "❌ File not found — may have already been deleted.",
-                reply_markup=admin_dashboard_kb(),
-            )
+            await query.answer("File not found — may have already been deleted.", show_alert=True)
+        from handlers.navigation import render_folder
+        await render_folder(client, query, folder_id=folder_id, page=1, user=user)
 
     elif action == ACTION_USR_REVOKE:
         # Revoke user access — routed here because confirm_action owns all yes: callbacks

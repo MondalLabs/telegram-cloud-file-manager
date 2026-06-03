@@ -21,16 +21,18 @@ from utils.callback_data import encode, ACTION_CONFIRM, ACTION_CANCEL
 def confirm_delete_kb(
     action: str,
     target_id: str,
+    cancel_data: str,
     label: str = "Delete",
 ) -> InlineKeyboardMarkup:
     """
     Generic Yes/No confirmation keyboard.
 
     Args:
-        action:    The action prefix that will execute on confirm
-                   (e.g. ACTION_DF for delete-folder).
-        target_id: The MongoDB document ID string of the target.
-        label:     Text shown on the confirm button (default: "Delete").
+        action:      The action prefix that will execute on confirm
+                     (e.g. ACTION_DF for delete-folder).
+        target_id:   The MongoDB document ID string of the target.
+        cancel_data: The callback data to execute on Cancel.
+        label:       Text shown on the confirm button (default: "Delete").
     """
     return InlineKeyboardMarkup([
         [
@@ -40,7 +42,7 @@ def confirm_delete_kb(
             ),
             InlineKeyboardButton(
                 text="❌ Cancel",
-                callback_data=encode(ACTION_CANCEL),
+                callback_data=cancel_data,
             ),
         ],
     ])
@@ -58,7 +60,7 @@ def cancel_only_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def confirm_revoke_kb(user_doc_id: str, display_name: str) -> InlineKeyboardMarkup:
+def confirm_revoke_kb(user_doc_id: str, display_name: str, cancel_data: str) -> InlineKeyboardMarkup:
     """
     Specific confirm keyboard for revoking a user's access.
     Button encodes yes:ur:{id} so it hits the revoke_confirmed handler,
@@ -73,7 +75,7 @@ def confirm_revoke_kb(user_doc_id: str, display_name: str) -> InlineKeyboardMark
             ),
             InlineKeyboardButton(
                 text="❌ Cancel",
-                callback_data=encode(ACTION_CANCEL),
+                callback_data=cancel_data,
             ),
         ],
     ])
