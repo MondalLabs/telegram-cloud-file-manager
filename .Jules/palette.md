@@ -8,3 +8,7 @@
 ## 2024-05-21 - Maintain Navigation Context on Cancel/Delete
 **Learning:** Users experience a "jarring layout shift" and lose context when they are teleported to the root directory after cancelling an action deep within a nested folder structure. Context-aware return navigation is essential for a smooth file manager UX.
 **Action:** Always maintain the user's navigational state during FSM actions or destructive confirmations. When an action is completed or cancelled, read the contextual data (such as `parent_id` or `folder_id`) and return the user exactly where they were instead of a generic main menu.
+
+## 2026-06-03 - Interactive Toast Labels for Informational Buttons
+**Learning:** Users can misclick on 'dead' informational buttons (like disabled arrows or page indicators) which fails silently, causing confusion.
+**Action:** Use the `query.answer()` toast capability to provide helpful, temporary feedback (e.g., '🚫 No more pages' or '📄 Page X of Y') on informational buttons, turning dead elements into interactive micro-interactions.

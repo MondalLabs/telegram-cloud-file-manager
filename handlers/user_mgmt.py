@@ -166,7 +166,7 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
         rows.append([
             InlineKeyboardButton(
                 text=f"👤 {name} ({u.telegram_id})",
-                callback_data="noop",
+                callback_data=encode("noop", "toast", f"User ID: {u.telegram_id}"),
             ),
             InlineKeyboardButton(
                 text="🚫 Revoke",
@@ -182,16 +182,16 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
                 text="◀️", callback_data=encode(ACTION_USR_LIST, pg.prev_page)
             ))
         else:
-            nav.append(InlineKeyboardButton(text="·", callback_data="noop"))
+            nav.append(InlineKeyboardButton(text="·", callback_data=encode("noop", "toast", "🚫 No more pages")))
         nav.append(InlineKeyboardButton(
-            text=f"{pg.page}/{pg.total_pages}", callback_data="noop"
+            text=f"{pg.page}/{pg.total_pages}", callback_data=encode("noop", "toast", f"📄 Page {pg.page} of {pg.total_pages}")
         ))
         if pg.has_next:
             nav.append(InlineKeyboardButton(
                 text="▶️", callback_data=encode(ACTION_USR_LIST, pg.next_page)
             ))
         else:
-            nav.append(InlineKeyboardButton(text="·", callback_data="noop"))
+            nav.append(InlineKeyboardButton(text="·", callback_data=encode("noop", "toast", "🚫 No more pages")))
         rows.append(nav)
 
     rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="usrmenu")])
