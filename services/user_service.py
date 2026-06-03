@@ -96,7 +96,7 @@ async def revoke_user(telegram_id: int) -> Optional[User]:
 
 async def list_approved() -> list[User]:
     """Return all currently approved (non-owner) users, sorted by name."""
-    return await User.find(User.role == UserRole.APPROVED).to_list()
+    return await User.find(User.role == UserRole.APPROVED).sort(+User.full_name).to_list()
 
 
 async def count_approved() -> int:
@@ -108,6 +108,7 @@ async def get_approved_paginated(skip: int, limit: int) -> list[User]:
     """Return a paginated slice of approved users."""
     return (
         await User.find(User.role == UserRole.APPROVED)
+        .sort(+User.full_name)
         .skip(skip)
         .limit(limit)
         .to_list()
