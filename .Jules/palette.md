@@ -8,3 +8,6 @@
 ## 2024-05-21 - Maintain Navigation Context on Cancel/Delete
 **Learning:** Users experience a "jarring layout shift" and lose context when they are teleported to the root directory after cancelling an action deep within a nested folder structure. Context-aware return navigation is essential for a smooth file manager UX.
 **Action:** Always maintain the user's navigational state during FSM actions or destructive confirmations. When an action is completed or cancelled, read the contextual data (such as `parent_id` or `folder_id`) and return the user exactly where they were instead of a generic main menu.
+## 2024-05-22 - Personalized Empty States
+**Learning:** Generic empty states can feel impersonal. Addressing the user by their display name when they reach an empty state adds a touch of personalization and makes the interface feel more engaging.
+**Action:** Personalize empty state messages using the user's name where appropriate.
