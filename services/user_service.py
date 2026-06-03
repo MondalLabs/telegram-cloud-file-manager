@@ -99,6 +99,21 @@ async def list_approved() -> list[User]:
     return await User.find(User.role == UserRole.APPROVED).to_list()
 
 
+async def count_approved() -> int:
+    """Return the total count of approved users."""
+    return await User.find(User.role == UserRole.APPROVED).count()
+
+
+async def get_approved_paginated(skip: int, limit: int) -> list[User]:
+    """Return a paginated slice of approved users."""
+    return (
+        await User.find(User.role == UserRole.APPROVED)
+        .skip(skip)
+        .limit(limit)
+        .to_list()
+    )
+
+
 async def find_user_by_id(telegram_id: int) -> Optional[User]:
     """Fetch a user document by Telegram ID. Returns None if not found."""
     return await User.find_one(User.telegram_id == telegram_id)

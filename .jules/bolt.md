@@ -9,3 +9,6 @@
 ## 2024-06-25 - MongoDB Pagination for Directory Listings
 **Learning:** Fetching an entire collection (all files and folders in a directory) into memory just to display a paginated slice is a severe O(N) memory and latency bottleneck, particularly for large directories. Relying on an in-memory `paginate` utility for database records defeats the purpose of database query optimizations like skip and limit.
 **Action:** When displaying paginated results from MongoDB, always compute pagination boundaries based on `.count()` queries and use `.skip().limit()` at the DB level to retrieve only the requested slice.
+## 2024-05-19 - MongoDB Pagination for Approved Users
+**Learning:** Fetching an entire collection of approved users into memory to display a paginated slice is a severe O(N) memory and latency bottleneck, identical to the directory listings issue previously identified.
+**Action:** Always compute pagination boundaries based on `.count()` queries and use `.skip().limit()` at the DB level to retrieve only the requested slice for user listings as well.
