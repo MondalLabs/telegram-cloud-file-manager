@@ -174,6 +174,16 @@ async def route_to_cdn(
         getattr(media, "file_name", None)
         or (f"photo_{message.id}.jpg" if file_type == "photo" else f"file_{message.id}")
     )
+
+    # 🛡️ Security: Enforce length limit (max 64) to prevent MessageTooLong DoS
+    if len(raw_name) > 64:
+        parts = raw_name.rsplit(".", 1)
+        if len(parts) == 2 and len(parts[1]) < 10:
+            ext = parts[1]
+            raw_name = parts[0][:64 - len(ext) - 1] + "." + ext
+        else:
+            raw_name = raw_name[:64]
+
     file_size: Optional[int] = getattr(media, "file_size", None)
     duration_raw = getattr(media, "duration", None)
     duration: Optional[int] = int(duration_raw) if duration_raw is not None else None
