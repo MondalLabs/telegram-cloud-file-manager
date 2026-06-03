@@ -324,6 +324,10 @@ async def fsm_text_router(client, message: Message, user: User) -> None:
 async def _handle_create_folder(client, message: Message, user: User, data: dict) -> None:
     """Process the folder name input for the Create Folder FSM."""
     name = message.text.strip()
+    if len(name) > 64:
+        await message.reply("⚠️ Folder name is too long (max 64 characters).\n\nSend a shorter name or tap Cancel to abort.", reply_markup=cancel_only_kb())
+        return
+
     parent_id_str = data.get("parent_id", "root")
     parent_id_obj = PydanticObjectId(parent_id_str) if parent_id_str != "root" else None
 
@@ -344,6 +348,10 @@ async def _handle_create_folder(client, message: Message, user: User, data: dict
 async def _handle_rename_folder(client, message: Message, user: User, data: dict) -> None:
     """Process the new name input for the Rename Folder FSM."""
     new_name = message.text.strip()
+    if len(new_name) > 64:
+        await message.reply("⚠️ Folder name is too long (max 64 characters).\n\nSend a shorter name or tap Cancel to abort.", reply_markup=cancel_only_kb())
+        return
+
     folder_id = data.get("folder_id")
     back_folder_id = data.get("back_folder_id", "root")
 
@@ -360,6 +368,10 @@ async def _handle_rename_folder(client, message: Message, user: User, data: dict
 async def _handle_rename_file(client, message: Message, user: User, data: dict) -> None:
     """Process the new name input for the Rename File FSM."""
     new_name = message.text.strip()
+    if len(new_name) > 64:
+        await message.reply("⚠️ File name is too long (max 64 characters).\n\nSend a shorter name or tap Cancel to abort.", reply_markup=cancel_only_kb())
+        return
+
     file_doc_id = data.get("file_doc_id")
     folder_id = data.get("folder_id", "root")
 

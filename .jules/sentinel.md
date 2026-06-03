@@ -12,3 +12,8 @@
 **Vulnerability:** Broad exception handlers (`except Exception as e:`) directly presented the raw exception string `str(e)` to end-users via Telegram messages.
 **Learning:** Displaying raw exceptions can expose sensitive backend configuration, MongoDB connection strings with credentials (like `ServerSelectionTimeoutError('mongodb+srv://user:pass@...')`), or internal stack traces to the user. Even though the user might be an admin/owner, it's unsafe to leak backend state.
 **Prevention:** Catch specific expected exceptions (like `ValueError` or `RuntimeError`) when safe, and provide a generic user-friendly error message for unexpected internal errors, logging the actual stack trace via `log.error` server-side instead.
+
+## 2025-06-03 - DoS via Missing Input Length Limits
+**Vulnerability:** File and folder creation/renaming handlers did not enforce a length limit on user input for `name`.
+**Learning:** Pyrogram API has internal message length limits. If a user provides an excessively long file or folder name, it could cause `MessageTooLong` exceptions or database bloat, resulting in a persistent Denial of Service (DoS) when attempting to render those entities in UI elements.
+**Prevention:** Always enforce strict string length validations (e.g., max 64 characters) on user-controlled names before writing to the database or passing to the Pyrogram client.
