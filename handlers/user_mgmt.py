@@ -50,6 +50,7 @@ async def approve_start(client, query: CallbackQuery, user: User) -> None:
     await fsm_service.set_state(
         user.telegram_id,
         state="approve_user:waiting_id",
+        data={"from_menu": "usrmenu"},
     )
     await query.edit_message_text(
         "✅ **Approve User**\n\n"
@@ -214,13 +215,15 @@ async def revoke_user_callback(client, query: CallbackQuery, user: User) -> None
         await query.answer("❌ User not found.", show_alert=True)
         return
 
+    cancel_data = encode(ACTION_USR_LIST, 1)
+
     try:
         await query.edit_message_text(
             f"🚫 **Revoke Access**\n\n"
             f"User: **{escape_markdown(target.display_name)}**\n"
             f"ID: `{target.telegram_id}`\n\n"
             f"This user will no longer be able to browse the library.",
-            reply_markup=confirm_revoke_kb(user_doc_id, target.display_name),
+            reply_markup=confirm_revoke_kb(user_doc_id, target.display_name, cancel_data=cancel_data),
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:

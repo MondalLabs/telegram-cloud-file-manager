@@ -5,3 +5,6 @@
 ## 2024-05-20 - Pagination Layout Shifts in Inline Keyboards
 **Learning:** Telegram inline keyboards automatically center their rows based on the number of buttons. Omitting 'Prev' or 'Next' buttons on the first or last pages of a paginated list causes the row to jump from 3 buttons to 2, causing a jarring layout shift that displaces the page indicator and causes misclicks.
 **Action:** Always maintain a consistent button count per row in paginated keyboards by replacing inactive 'Prev'/'Next' buttons with disabled-like placeholders (e.g. `·` with a `noop` callback).
+## 2024-05-21 - Maintain Navigation Context on Cancel/Delete
+**Learning:** Users experience a "jarring layout shift" and lose context when they are teleported to the root directory after cancelling an action deep within a nested folder structure. Context-aware return navigation is essential for a smooth file manager UX.
+**Action:** Always maintain the user's navigational state during FSM actions or destructive confirmations. When an action is completed or cancelled, read the contextual data (such as `parent_id` or `folder_id`) and return the user exactly where they were instead of a generic main menu.
