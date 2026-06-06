@@ -63,6 +63,10 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         display_name = "Root"
         folder_id_stored = "root"
     else:
+        if not PydanticObjectId.is_valid(folder_id):
+            await query.edit_message_text("❌ Invalid folder ID.")
+            return
+
         folder = await folder_service.get_folder(PydanticObjectId(folder_id))
         if folder is None:
             await query.edit_message_text("❌ Folder not found.")
