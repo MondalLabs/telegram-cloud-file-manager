@@ -115,9 +115,9 @@ async def render_folder(
             is_admin=is_admin,
         )
         if is_admin:
-            text += "\n\n_This folder is empty. Tap ➕ New Folder or 📤 Upload below to add content._"
+            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}. Tap ➕ New Folder or 📤 Upload below to add content._"
         else:
-            text += "\n\n_This folder is empty._"
+            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}._"
     else:
         # Calculate pagination boundaries across both collections sequentially
         total_items = folder_count + file_count
