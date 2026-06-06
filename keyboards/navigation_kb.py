@@ -103,11 +103,11 @@ def build_folder_keyboard(
                 callback_data=encode(ACTION_NAV, current_id, pg.prev_page),
             ))
         else:
-            nav_row.append(InlineKeyboardButton(text="·", callback_data="noop"))
+            nav_row.append(InlineKeyboardButton(text="·", callback_data=encode("noop", "toast", "🚫 No more pages")))
 
         nav_row.append(InlineKeyboardButton(
             text=f"{pg.page} / {pg.total_pages}",
-            callback_data="noop",
+            callback_data=encode("noop", "toast", f"📄 Page {pg.page} of {pg.total_pages}"),
         ))
 
         if pg.has_next:
@@ -116,7 +116,7 @@ def build_folder_keyboard(
                 callback_data=encode(ACTION_NAV, current_id, pg.next_page),
             ))
         else:
-            nav_row.append(InlineKeyboardButton(text="·", callback_data="noop"))
+            nav_row.append(InlineKeyboardButton(text="·", callback_data=encode("noop", "toast", "🚫 No more pages")))
 
         rows.append(nav_row)
 

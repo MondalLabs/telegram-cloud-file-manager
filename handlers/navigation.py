@@ -209,10 +209,14 @@ async def back_callback(client, query: CallbackQuery, user: User) -> None:
 # ── noop callback (page indicator button) ─────────────────────────────────────
 
 
-@bot.on_callback_query(filters.regex(r"^noop$"))
+@bot.on_callback_query(filters.regex(r"^noop"))
 async def noop_callback(client, query: CallbackQuery) -> None:
     """Page indicator button — does nothing, just answers the callback."""
-    await query.answer()
+    parts = decode(query.data)
+    if len(parts) >= 3 and parts[1] == "toast":
+        await query.answer(parts[2], cache_time=60)
+    else:
+        await query.answer()
 
 # ── fi:{folder_id} — Folder action menu ──────────────────────────────────────
 
