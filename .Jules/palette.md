@@ -11,3 +11,6 @@
 ## 2024-05-22 - Personalized Empty States
 **Learning:** Generic empty states can feel impersonal. Addressing the user by their display name when they reach an empty state adds a touch of personalization and makes the interface feel more engaging.
 **Action:** Personalize empty state messages using the user's name where appropriate.
+## 2026-06-03 - Interactive Toast Labels for Informational Buttons
+**Learning:** Users can misclick on 'dead' informational buttons (like disabled arrows or page indicators) which fails silently, causing confusion.
+**Action:** Use the `query.answer()` toast capability to provide helpful, temporary feedback (e.g., '🚫 No more pages' or '📄 Page X of Y') on informational buttons, turning dead elements into interactive micro-interactions.
