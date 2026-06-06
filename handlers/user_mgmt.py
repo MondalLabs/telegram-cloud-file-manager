@@ -29,7 +29,7 @@ from beanie import PydanticObjectId
 from bot.client import bot
 from models.user import User, UserRole
 from middlewares.access_control import owner_only
-from keyboards.admin_kb import user_management_kb, admin_dashboard_kb
+from keyboards.admin_kb import user_management_kb
 from keyboards.confirm_kb import confirm_revoke_kb, cancel_only_kb
 import services.user_service as user_service
 import services.fsm_service as fsm_service
