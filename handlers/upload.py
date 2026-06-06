@@ -63,6 +63,10 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         display_name = "Root"
         folder_id_stored = "root"
     else:
+        if not PydanticObjectId.is_valid(folder_id):
+            await query.answer("❌ Invalid folder ID.", show_alert=True)
+            return
+
         folder = await folder_service.get_folder(PydanticObjectId(folder_id))
         if folder is None:
             await query.edit_message_text("❌ Folder not found.")
@@ -111,6 +115,12 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
         return  # Not in upload mode — ignore
 
     folder_id_str: str = data.get("folder_id", "root")
+
+    if folder_id_str != "root" and not PydanticObjectId.is_valid(folder_id_str):
+        await message.reply("❌ Upload session invalid (bad folder ID). Please try again.")
+        await fsm_service.clear_state(user.telegram_id)
+        return
+
     folder_id_obj: PydanticObjectId | None = (
         PydanticObjectId(folder_id_str) if folder_id_str != "root" else None
     )
