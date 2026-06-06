@@ -18,7 +18,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message, CallbackQuery
 
 from bot.client import bot
-from models.user import User, UserRole
+from models.user import UserRole
 import services.user_service as user_service
 
 def _access_denied_text(telegram_id: int) -> str:
