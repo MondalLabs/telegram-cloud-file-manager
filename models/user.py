@@ -46,6 +46,8 @@ class User(Document):
         name = "users"
         indexes = [
             IndexModel([("telegram_id", ASCENDING)], unique=True),
+            # Fast O(1) sort for approved user listings
+            IndexModel([("role", ASCENDING), ("full_name", ASCENDING)]),
         ]
 
     def __repr__(self) -> str:
