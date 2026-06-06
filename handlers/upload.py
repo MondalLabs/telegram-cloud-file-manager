@@ -44,7 +44,7 @@ from keyboards.admin_kb import upload_cancel_kb, admin_dashboard_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
 import services.fsm_service as fsm_service
-from utils.callback_data import decode, ACTION_UPL
+from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
