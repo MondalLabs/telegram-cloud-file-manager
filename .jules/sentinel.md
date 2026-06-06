@@ -17,3 +17,7 @@
 **Vulnerability:** File and folder creation/renaming handlers did not enforce a length limit on user input for `name`.
 **Learning:** Pyrogram API has internal message length limits. If a user provides an excessively long file or folder name, it could cause `MessageTooLong` exceptions or database bloat, resulting in a persistent Denial of Service (DoS) when attempting to render those entities in UI elements.
 **Prevention:** Always enforce strict string length validations (e.g., max 64 characters) on user-controlled names before writing to the database or passing to the Pyrogram client.
+## 2025-06-03 - DoS via Missing Input Length Limits
+**Vulnerability:** File names extracted from uploaded Telegram media (e.g., via `getattr(media, "file_name", None)`) could be arbitrarily long. When rendered in Markdown messages, they exceeded Pyrogram API limits (`MessageTooLong` error), causing a persistent Denial of Service (DoS) for handlers processing those files.
+**Learning:** External inputs, even seemingly benign ones like file names from Telegram media, must be treated as untrusted and can cause application crashes if their length is not constrained before storage and rendering.
+**Prevention:** Always truncate or limit the length of file names (e.g., to 128 characters) immediately after extraction and before writing to the database or passing to the Pyrogram client, while taking care to preserve the file extension if applicable.
