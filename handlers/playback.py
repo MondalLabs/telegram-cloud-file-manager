@@ -124,11 +124,12 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
         return
 
     file_doc_id = parts[1]
-    try:
-        file_doc = await file_service.get_file(PydanticObjectId(file_doc_id))
-    except Exception:
+
+    if not PydanticObjectId.is_valid(file_doc_id):
         await query.answer("❌ Invalid file ID.", show_alert=True)
         return
+
+    file_doc = await file_service.get_file(PydanticObjectId(file_doc_id))
 
     if file_doc is None:
         await query.answer("❌ File not found — it may have been deleted.", show_alert=True)

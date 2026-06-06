@@ -73,12 +73,11 @@ async def render_folder(
         breadcrumb_text = "🏠 **Root**"
         back_parent_id = None
     else:
-        try:
-            parent_id_obj = PydanticObjectId(folder_id)
-        except Exception:
+        if not PydanticObjectId.is_valid(folder_id):
             if isinstance(update, CallbackQuery):
                 await update.answer("❌ Invalid folder ID.", show_alert=True)
             return
+        parent_id_obj = PydanticObjectId(folder_id)
         current_folder = await folder_service.get_folder(parent_id_obj)
         if current_folder is None:
             if isinstance(update, CallbackQuery):
@@ -229,6 +228,10 @@ async def folder_info_callback(client, query: CallbackQuery, user: User) -> None
     parts = decode(query.data)
     folder_id = parts[1]
 
+    if not PydanticObjectId.is_valid(folder_id):
+        await query.answer("❌ Invalid folder ID.", show_alert=True)
+        return
+
     folder = await folder_service.get_folder(PydanticObjectId(folder_id))
     if folder is None:
         await query.answer("❌ Folder not found.", show_alert=True)
@@ -251,6 +254,10 @@ async def file_info_callback(client, query: CallbackQuery, user: User) -> None:
     await query.answer()
     parts = decode(query.data)
     file_doc_id = parts[1]
+
+    if not PydanticObjectId.is_valid(file_doc_id):
+        await query.answer("❌ Invalid file ID.", show_alert=True)
+        return
 
     file_doc = await file_service.get_file(PydanticObjectId(file_doc_id))
     if file_doc is None:
