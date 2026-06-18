@@ -104,6 +104,11 @@ export default function App() {
   const [healthLoading, setHealthLoading] = useState(false);
   const [statsData, setStatsData] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [searchUserQuery, setSearchUserQuery] = useState('');
+  const [allFolders, setAllFolders] = useState([]);
+  const [exceptionEditorUser, setExceptionEditorUser] = useState(null); // stores user_doc_id
+  const [selectedFolderForException, setSelectedFolderForException] = useState('');
+  const [exceptionRuleType, setExceptionRuleType] = useState('allow'); // 'allow' | 'block'
 
   // Authentication states
   const [isReady, setIsReady] = useState(false);
@@ -721,14 +726,17 @@ export default function App() {
     setHealthStatus(null);
     try {
       if (isMockMode) {
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 800));
         setHealthStatus({
           total: 50,
-          active: 49,
+          active: 46,
           legacy: 1,
-          broken: []
+          broken: [
+            { id: 'b_mock_1', name: 'Premium_CDN_Tutorial_Corrupt.mp4', folder_path: '🎥 Movies & Shows' },
+            { id: 'b_mock_2', name: 'Whitelisted_Leak_Document.pdf', folder_path: '🛡️ Restricted Documents (Admin)' }
+          ]
         });
-        showToast("Storage audit finished!", "success");
+        showToast("Diagnostics complete (Demo)", "success");
         return;
       }
 
@@ -794,6 +802,198 @@ export default function App() {
       if (!res.ok) throw new Error("Exception update failed.");
       showToast("Exception configured successfully!", "success");
       loadAdminUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const loadAllFolders = async () => {
+    try {
+      const headers = {};
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      if (isMockMode) {
+        setAllFolders([
+          { id: 'f1', name: '🎥 Movies & Shows' },
+          { id: 'f2', name: '📚 Textbooks & E-books' },
+          { id: 'f3', name: '🎵 Audio & Music Album' },
+          { id: 'f4', name: '🛡️ Restricted Documents (Admin)' }
+        ]);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/admin/folders/all`, { headers });
+      if (!res.ok) throw new Error("Failed to load folder indexes.");
+      const data = await res.json();
+      setAllFolders(data);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleRemoveException = async (userDocId, folderId) => {
+    try {
+      if (isMockMode) {
+        setUsersList(prev => prev.map(u => {
+          if (u.user_doc_id !== userDocId) return u;
+          return {
+            ...u,
+            allowed_folders: u.allowed_folders.filter(f => f.id !== folderId),
+            blocked_folders: u.blocked_folders.filter(f => f.id !== folderId)
+          };
+        }));
+        showToast("Exception removed (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/users/exceptions/remove`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_doc_id: userDocId, folder_id: folderId })
+      });
+
+      if (!res.ok) throw new Error("Failed to remove exception rule.");
+      showToast("Exception rule removed", "success");
+      loadAdminUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleAddException = async () => {
+    if (!exceptionEditorUser || !selectedFolderForException) return;
+    const userDocId = exceptionEditorUser;
+    const folderId = selectedFolderForException;
+    const type = exceptionRuleType;
+
+    const endpoint = type === 'allow' 
+      ? '/api/admin/users/exceptions/allow' 
+      : '/api/admin/users/exceptions/block';
+
+    try {
+      if (isMockMode) {
+        const folderObj = allFolders.find(f => f.id === folderId) || { id: folderId, name: "Folder Exception" };
+        setUsersList(prev => prev.map(u => {
+          if (u.user_doc_id !== userDocId) return u;
+          let allowed = [...u.allowed_folders];
+          let blocked = [...u.blocked_folders];
+          if (type === 'allow') {
+            if (!allowed.some(f => f.id === folderId)) allowed.push(folderObj);
+            blocked = blocked.filter(f => f.id !== folderId);
+          } else {
+            if (!blocked.some(f => f.id === folderId)) blocked.push(folderObj);
+            allowed = allowed.filter(f => f.id !== folderId);
+          }
+          return { ...u, allowed_folders: allowed, blocked_folders: blocked };
+        }));
+        setExceptionEditorUser(null);
+        setSelectedFolderForException('');
+        showToast("Exception added (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_doc_id: userDocId, folder_id: folderId })
+      });
+
+      if (!res.ok) throw new Error("Failed to add folder exception.");
+      setExceptionEditorUser(null);
+      setSelectedFolderForException('');
+      showToast("Exception rule added successfully!", "success");
+      loadAdminUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleApproveUser = async (userDocId) => {
+    try {
+      if (isMockMode) {
+        setUsersList(prev => prev.map(u => u.user_doc_id === userDocId ? { ...u, role: 'approved' } : u));
+        showToast("User approved (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/users/approve`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_doc_id: userDocId })
+      });
+
+      if (!res.ok) throw new Error("Approval failed.");
+      showToast("User approved successfully!", "success");
+      loadAdminUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleRevokeUser = async (userDocId) => {
+    try {
+      if (isMockMode) {
+        setUsersList(prev => prev.map(u => u.user_doc_id === userDocId ? { ...u, role: 'guest' } : u));
+        showToast("Access revoked (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/users/revoke`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_doc_id: userDocId })
+      });
+
+      if (!res.ok) throw new Error("Revocation failed.");
+      showToast("Access revoked successfully", "success");
+      loadAdminUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handlePurgeBroken = async (fileIds) => {
+    if (!fileIds || fileIds.length === 0) return;
+    try {
+      if (isMockMode) {
+        setHealthStatus(prev => {
+          if (!prev) return null;
+          const newBroken = prev.broken.filter(f => !fileIds.includes(f.id));
+          return {
+            ...prev,
+            total: prev.total - fileIds.length,
+            broken: newBroken
+          };
+        });
+        showToast("Broken references purged (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/purge-broken`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ file_ids: fileIds })
+      });
+
+      if (!res.ok) throw new Error("Failed to purge broken references.");
+      const data = await res.json();
+      showToast(`Purged ${data.purged_count} broken reference(s)!`, "success");
+      runHealthCheck();
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -867,7 +1067,7 @@ export default function App() {
           {currentUser?.role?.toLowerCase() === 'owner' && (
             <button 
               style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
-              onClick={() => { triggerHaptic('light'); setIsAdminOpen(!isAdminOpen); if(!isAdminOpen) loadAdminUsers(); }}
+              onClick={() => { triggerHaptic('light'); setIsAdminOpen(!isAdminOpen); if(!isAdminOpen) { loadAdminUsers(); loadAllFolders(); } }}
             >
               <Shield size={18} />
             </button>
@@ -1351,19 +1551,67 @@ export default function App() {
             {/* TAB CONTENT: Access & Exceptions */}
             {adminTab === 'access' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>All Registered Users:</span>
+                {/* Search Registered Users Box */}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                  <Search size={14} style={{ position: 'absolute', left: '10px', color: 'var(--hint-color)' }} />
+                  <input 
+                    type="text" 
+                    placeholder="Search registered users by name..."
+                    style={{ 
+                      width: '100%', 
+                      backgroundColor: 'rgba(0,0,0,0.15)', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: '8px', 
+                      padding: '8px 12px 8px 30px', 
+                      color: 'var(--text-color)', 
+                      fontSize: '0.8rem',
+                      outline: 'none'
+                    }}
+                    value={searchUserQuery}
+                    onChange={(e) => setSearchUserQuery(e.target.value)}
+                  />
+                  {searchUserQuery && (
+                    <button 
+                      style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      onClick={() => setSearchUserQuery('')}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>All Registered Users:</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)' }}>
+                    Showing {usersList.filter(u => {
+                      const term = searchUserQuery.toLowerCase();
+                      return (u.display_name || '').toLowerCase().includes(term) || (u.username || '').toLowerCase().includes(term);
+                    }).length} of {usersList.length}
+                  </span>
+                </div>
+
                 {usersList.length === 0 ? (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)', textAlign: 'center', padding: '20px' }}>No users found</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)', textAlign: 'center', padding: '20px' }}>No users registered.</span>
+                ) : usersList.filter(u => {
+                  const term = searchUserQuery.toLowerCase();
+                  return (u.display_name || '').toLowerCase().includes(term) || (u.username || '').toLowerCase().includes(term);
+                }).length === 0 ? (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)', textAlign: 'center', padding: '20px' }}>No users match search criteria.</span>
                 ) : (
-                  usersList.map(u => {
+                  usersList.filter(u => {
+                    const term = searchUserQuery.toLowerCase();
+                    return (u.display_name || '').toLowerCase().includes(term) || (u.username || '').toLowerCase().includes(term);
+                  }).map(u => {
                     const uRole = u.role || 'guest';
                     return (
-                      <div key={u.user_doc_id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
+                      <div key={u.user_doc_id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600 }}>{u.display_name}</span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)' }}>
-                              @{u.username || 'no_username'} &bull; Role: <span style={{ color: uRole === 'approved' ? 'var(--success-color)' : 'var(--danger-color)' }}>{uRole.toUpperCase()}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.display_name}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                              <span>@{u.username || 'no_username'}</span> &bull; 
+                              <span style={{ fontFamily: 'monospace' }}>ID: {u.telegram_id}</span> &bull;
+                              <span>Role: <span style={{ color: uRole === 'approved' ? 'var(--success-color)' : 'var(--danger-color)', fontWeight: 600 }}>{uRole.toUpperCase()}</span></span>
                             </span>
                           </div>
                           <div style={{ display: 'flex', gap: '6px' }}>
@@ -1388,20 +1636,80 @@ export default function App() {
                         </div>
                         
                         {uRole === 'approved' && (
-                          <div style={{ marginTop: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)' }}>Folder Access Exceptions:</span>
+                          <div style={{ marginTop: '10px', paddingLeft: '4px', borderLeft: '2px solid rgba(255,255,255,0.03)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', fontWeight: 500 }}>Folder Exceptions:</span>
                               <div style={{ display: 'flex', gap: '4px' }}>
                                 <button className="z-btn z-btn-primary" style={{ padding: '2px 6px', fontSize: '0.65rem' }} onClick={() => handleToggleException(u.user_doc_id, currentFolderId, 'allow')}>Allow Current</button>
-                                <button className="z-btn z-btn-text" style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid var(--border-color)' }} onClick={() => handleToggleException(u.user_doc_id, currentFolderId, 'block')}>Block Current</button>
+                                <button className="z-btn z-btn-primary" style={{ padding: '2px 6px', fontSize: '0.65rem', backgroundColor: 'var(--danger-color, #ef4444)' }} onClick={() => handleToggleException(u.user_doc_id, currentFolderId, 'block')}>Block Current</button>
+                                <button className="z-btn z-btn-primary" style={{ padding: '2px 6px', fontSize: '0.65rem', backgroundColor: 'var(--button-color)' }} onClick={() => { triggerHaptic('light'); setExceptionEditorUser(u.user_doc_id); setSelectedFolderForException(''); setExceptionRuleType('allow'); }}>+ Custom</button>
                                 {(u.allowed_folders?.length > 0 || u.blocked_folders?.length > 0) && (
                                   <button className="z-btn z-btn-text" style={{ padding: '2px 6px', fontSize: '0.65rem', color: 'var(--danger-color)' }} onClick={() => handleToggleException(u.user_doc_id, currentFolderId, 'reset')}>Reset</button>
                                 )}
                               </div>
                             </div>
-                            <div className="pill-container" style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                              {u.allowed_folders?.map(f => <span key={f.id} className="z-badge allow">Allow: {f.name}</span>)}
-                              {u.blocked_folders?.map(f => <span key={f.id} className="z-badge block">Block: {f.name}</span>)}
+
+                            {/* Exception Editor Inline Form */}
+                            {exceptionEditorUser === u.user_doc_id && (
+                              <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'var(--hint-color)', letterSpacing: '0.05em' }}>ADD CUSTOM FOLDER EXCEPTION</span>
+                                <div>
+                                  <select
+                                    value={selectedFolderForException}
+                                    onChange={(e) => setSelectedFolderForException(e.target.value)}
+                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', backgroundColor: 'var(--secondary-bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', fontSize: '0.75rem', outline: 'none' }}
+                                  >
+                                    <option value="">-- Select Folder --</option>
+                                    {allFolders.map(f => (
+                                      <option key={f.id} value={f.id}>{f.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '12px' }}>
+                                    <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                      <input type="radio" name={`rule-type-${u.user_doc_id}`} checked={exceptionRuleType === 'allow'} onChange={() => setExceptionRuleType('allow')} />
+                                      Allow Access
+                                    </label>
+                                    <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                      <input type="radio" name={`rule-type-${u.user_doc_id}`} checked={exceptionRuleType === 'block'} onChange={() => setExceptionRuleType('block')} />
+                                      Block Access
+                                    </label>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button className="z-btn z-btn-text" style={{ padding: '4px 8px', fontSize: '0.65rem' }} onClick={() => setExceptionEditorUser(null)}>Cancel</button>
+                                    <button className="z-btn z-btn-primary" style={{ padding: '4px 10px', fontSize: '0.65rem' }} onClick={handleAddException}>Save</button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Exception Badges List */}
+                            <div className="pill-container" style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {u.allowed_folders?.map(f => (
+                                <span key={f.id} className="z-badge allow" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '2px' }}>
+                                  Allow: {f.name}
+                                  <button 
+                                    style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0 4px', fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                                    onClick={() => { triggerHaptic('medium'); handleRemoveException(u.user_doc_id, f.id); }}
+                                    title="Remove Exception"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                              {u.blocked_folders?.map(f => (
+                                <span key={f.id} className="z-badge block" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '2px' }}>
+                                  Block: {f.name}
+                                  <button 
+                                    style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '0 4px', fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                                    onClick={() => { triggerHaptic('medium'); handleRemoveException(u.user_doc_id, f.id); }}
+                                    title="Remove Exception"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -1482,26 +1790,122 @@ export default function App() {
             {/* TAB CONTENT: Audit */}
             {adminTab === 'health' && (
               <div>
-                <div className="glass-panel" style={{ padding: '12px', marginBottom: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                {/* Audit Controls & Execution Status */}
+                <div className="glass-panel" style={{ padding: '12px', marginBottom: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Diagnostic Audit</span>
-                    <button className="z-btn z-btn-primary" style={{ padding: '4px 10px', fontSize: '0.7rem' }} onClick={runHealthCheck} disabled={healthLoading}>
-                      {healthLoading ? "Auditing..." : "Start"}
-                    </button>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>Verify database reference integrity against Telegram CDN</span>
                   </div>
-
-                  {healthStatus && (
-                    <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div>Total Files: {healthStatus.total}</div>
-                      <div>Active: {healthStatus.active}</div>
-                      {healthStatus.broken?.length > 0 && (
-                        <div style={{ color: 'var(--danger-color)', marginTop: '4px' }}>
-                          Missing: {healthStatus.broken.length} references
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <button className="z-btn z-btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={runHealthCheck} disabled={healthLoading}>
+                    {healthLoading ? "Scanning..." : "Start scan"}
+                  </button>
                 </div>
+
+                {healthLoading && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', gap: '8px' }}>
+                    <RefreshCw className="animate-spin" size={24} style={{ color: 'var(--accent-color)' }} />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Verifying Telegram file records...</span>
+                  </div>
+                )}
+
+                {/* Audit Results Visualization */}
+                {!healthLoading && healthStatus && (
+                  <div>
+                    {/* Integrity Score Card */}
+                    {(() => {
+                      const integrityPercent = healthStatus.total > 0 ? Math.round((healthStatus.active / healthStatus.total) * 100) : 100;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', marginBottom: '16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)', fontWeight: 'bold' }}>SYSTEM INTEGRITY</span>
+                            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: integrityPercent === 100 ? 'var(--success-color)' : 'var(--warning-color)' }}>
+                              {integrityPercent}% Healthy
+                            </span>
+                          </div>
+                          {/* Progress Bar */}
+                          <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div 
+                              style={{ 
+                                width: `${integrityPercent}%`, 
+                                height: '100%', 
+                                background: integrityPercent === 100 ? 'var(--success-color)' : 'linear-gradient(90deg, var(--warning-color) 0%, var(--danger-color) 100%)',
+                                borderRadius: '4px',
+                                transition: 'width 0.5s ease-out'
+                              }} 
+                            />
+                          </div>
+                          
+                          {/* Stats Grid */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '8px', textAlign: 'center' }}>
+                            <div style={{ padding: '6px', background: 'rgba(255,255,255,0.01)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>{healthStatus.total}</div>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--hint-color)' }}>Total</div>
+                            </div>
+                            <div style={{ padding: '6px', background: 'rgba(34,197,94,0.02)', borderRadius: '6px', border: '1px solid rgba(34,197,94,0.08)' }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--success-color)' }}>{healthStatus.active}</div>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--success-color)' }}>Active</div>
+                            </div>
+                            <div style={{ padding: '6px', background: 'rgba(239,68,68,0.02)', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.08)' }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--danger-color)' }}>{healthStatus.broken?.length || 0}</div>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--danger-color)' }}>Broken</div>
+                            </div>
+                            <div style={{ padding: '6px', background: 'rgba(255,255,255,0.01)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--hint-color)' }}>{healthStatus.legacy || 0}</div>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--hint-color)' }}>Legacy</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Detailed Broken Files List */}
+                    {healthStatus.broken && healthStatus.broken.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--danger-color)' }}>Broken References List:</span>
+                          <button 
+                            className="z-btn z-btn-primary" 
+                            style={{ padding: '4px 8px', fontSize: '0.65rem', backgroundColor: 'var(--danger-color)' }}
+                            onClick={() => {
+                              if (confirm("Are you sure you want to purge all broken references from the database? This cannot be undone.")) {
+                                handlePurgeBroken(healthStatus.broken.map(b => b.id));
+                              }
+                            }}
+                          >
+                            Purge All
+                          </button>
+                        </div>
+
+                        <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px', background: 'rgba(0,0,0,0.1)' }}>
+                          {healthStatus.broken.map(b => (
+                            <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.75rem' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', overflow: 'hidden', flex: 1, paddingRight: '8px', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+                                <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>Path: {b.folder_path}</span>
+                              </div>
+                              <button 
+                                style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                                onClick={() => {
+                                  if (confirm(`Remove this broken reference "${b.name}"?`)) {
+                                    handlePurgeBroken([b.id]);
+                                  }
+                                }}
+                                title="Delete Reference"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0 16px 0', opacity: 0.7, gap: '8px' }}>
+                        <Check size={28} style={{ color: 'var(--success-color)' }} />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>All file references verified healthy!</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

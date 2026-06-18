@@ -74,6 +74,9 @@ class FileCopyRequest(BaseModel):
 class UserApproveRequest(BaseModel):
     user_doc_id: str
 
+class PurgeBrokenRequest(BaseModel):
+    file_ids: List[str]
+
 # ── Dependency Injection Gating ────────────────────────────────────────────────
 
 async def get_current_user(x_telegram_init_data: str = Header(..., alias="X-Telegram-Init-Data")) -> User:
@@ -583,3 +586,39 @@ async def api_run_health_check(user: User = Depends(get_admin_user)) -> dict:
         "legacy": legacy_count,
         "broken": broken_files
     }
+
+@router.get("/admin/folders/all")
+async def get_all_folders(user: User = Depends(get_admin_user)) -> List[dict]:
+    """Returns a list of all folders in the database sorted by name (Admin only)."""
+    all_folders = await Folder.find_all().sort(+Folder.name).to_list()
+    return [{"id": str(f.id), "name": f.name} for f in all_folders]
+
+@router.post("/admin/users/exceptions/remove")
+async def api_remove_exception(req: UserExceptionRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Remove a folder exception (Allow or Block) for a user (Admin only)."""
+    if not PydanticObjectId.is_valid(req.folder_id):
+        raise HTTPException(status_code=400, detail="Invalid folder ID")
+    
+    target = await user_service.find_user_by_id_doc(req.user_doc_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    folder_id_obj = PydanticObjectId(req.folder_id)
+    if folder_id_obj in target.allowed_folders:
+        target.allowed_folders.remove(folder_id_obj)
+    if folder_id_obj in target.blocked_folders:
+        target.blocked_folders.remove(folder_id_obj)
+        
+    await target.save()
+    return {"status": "ok"}
+
+@router.post("/admin/purge-broken")
+async def api_purge_broken(req: PurgeBrokenRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Deletes broken file references from the database (Admin only)."""
+    count = 0
+    for fid in req.file_ids:
+        if PydanticObjectId.is_valid(fid):
+            success = await file_service.delete_file(PydanticObjectId(fid))
+            if success:
+                count += 1
+    return {"status": "ok", "purged_count": count}

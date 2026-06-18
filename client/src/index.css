@@ -558,3 +558,26 @@ body {
   background: rgba(99, 102, 241, 0.1);
   color: #a5b4fc;
 }
+
+/* Scrollbar and UI tweaks inside Admin Panel */
+.z-modal::-webkit-scrollbar,
+.z-modal *::-webkit-scrollbar {
+  width: 4px;
+}
+.z-modal::-webkit-scrollbar-thumb,
+.z-modal *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.z-modal::-webkit-scrollbar-thumb:hover,
+.z-modal *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.z-badge button {
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.z-badge button:hover {
+  opacity: 0.8;
+  transform: scale(1.15);
+}
