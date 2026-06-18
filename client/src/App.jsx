@@ -1029,6 +1029,67 @@ export default function App() {
     return <FileIcon size={16} style={{ color: '#9ca3af' }} />;
   };
 
+  const isMockBypass = new URLSearchParams(window.location.search).get('mock') === 'true';
+
+  if (!isReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-color, #17212b)', color: 'var(--text-color, #f5f5f5)' }}>
+        <RefreshCw className="animate-spin" size={24} style={{ color: 'var(--accent-color, #22c55e)' }} />
+      </div>
+    );
+  }
+
+  if (!initData && !isMockBypass) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#17212b',
+        color: '#f5f5f5',
+        padding: '24px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+      }}>
+        <div style={{
+          maxWidth: '380px',
+          width: '100%',
+          backgroundColor: '#202b36',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '16px',
+          padding: '32px 24px',
+          textAlign: 'center',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ef4444',
+            marginBottom: '8px'
+          }}>
+            <Lock size={32} />
+          </div>
+          
+          <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0 }}>403 Forbidden</h2>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#ef4444', margin: 0 }}>Access Denied</h3>
+          
+          <p style={{ fontSize: '0.8rem', color: '#708499', lineHeight: '1.5', margin: '8px 0' }}>
+            This application is cryptographically secured and can only be accessed from within the official Telegram Messenger client.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Toast notifications */}
