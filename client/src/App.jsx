@@ -30,7 +30,8 @@ import {
   FileSpreadsheet,
   Info,
   Clipboard,
-  Copy
+  Copy,
+  ArrowUpDown
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -282,14 +283,43 @@ export default function App() {
     }
   };
 
-  // Search filtering
+  // Search filtering and sorting
   const filteredFolders = useMemo(() => {
-    return folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [folders, searchQuery]);
+    const matched = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    return [...matched].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'name') {
+        comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === 'date') {
+        comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      } else {
+        // Fallback to name comparison for folders
+        comparison = a.name.localeCompare(b.name);
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [folders, searchQuery, sortBy, sortOrder]);
 
   const filteredFiles = useMemo(() => {
-    return files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [files, searchQuery]);
+    const matched = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    return [...matched].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'name') {
+        comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === 'size') {
+        comparison = (a.file_size || 0) - (b.file_size || 0);
+      } else if (sortBy === 'date') {
+        const dateA = new Date(a.uploaded_at || a.created_at || 0);
+        const dateB = new Date(b.uploaded_at || b.created_at || 0);
+        comparison = dateA - dateB;
+      } else if (sortBy === 'type') {
+        const extA = (a.name || '').split('.').pop() || '';
+        const extB = (b.name || '').split('.').pop() || '';
+        comparison = extA.localeCompare(extB);
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [files, searchQuery, sortBy, sortOrder]);
 
   // Folder Click Actions
   const handleFolderClick = (folder) => {
@@ -823,6 +853,13 @@ export default function App() {
         <div className="z-header-right">
           <button 
             style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
+            onClick={() => { triggerHaptic('light'); setIsSortOpen(true); }}
+            title="Sort options"
+          >
+            <ArrowUpDown size={18} />
+          </button>
+          <button 
+            style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
           >
             {viewMode === 'grid' ? <List size={18} /> : <Grid size={18} />}
@@ -881,7 +918,7 @@ export default function App() {
       </div>
 
       {/* ── 4. Folders and Files Explorer List ───────────────────────── */}
-      <div className="z-list">
+      <div className={`z-list ${viewMode === 'grid' ? 'z-grid-view' : 'z-list-view'}`}>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', gap: '8px' }}>
             <RefreshCw className="animate-spin" size={24} style={{ color: 'var(--accent-color)' }} />
@@ -913,12 +950,14 @@ export default function App() {
                   </div>
                 </div>
                 
-                <button 
-                  style={{ background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', padding: '8px' }}
-                  onClick={(e) => { e.stopPropagation(); triggerHaptic('light'); setActiveItem({ ...folder, type: 'folder' }); }}
-                >
-                  <MoreVertical size={16} />
-                </button>
+                <div className="z-item-actions" onClick={(e) => e.stopPropagation()}>
+                  <button 
+                    className="z-action-btn"
+                    onClick={() => { triggerHaptic('light'); setActiveItem({ ...folder, type: 'folder' }); }}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -941,15 +980,15 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                <div className="z-item-actions has-play" onClick={(e) => e.stopPropagation()}>
                   <button 
-                    style={{ background: 'none', border: 'none', color: 'var(--success-color)', cursor: 'pointer', padding: '8px' }}
+                    className="z-action-btn play-btn"
                     onClick={() => handlePlayFile(file.id)}
                   >
                     <Play size={14} fill="var(--success-color)" />
                   </button>
                   <button 
-                    style={{ background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', padding: '8px' }}
+                    className="z-action-btn"
                     onClick={() => { triggerHaptic('light'); setActiveItem({ ...file, type: 'file' }); }}
                   >
                     <MoreVertical size={16} />
@@ -1009,6 +1048,90 @@ export default function App() {
             </button>
           )}
         </>
+      )}
+
+      {/* ── Sorting bottom sheet dialog ─────────────────────────── */}
+      {isSortOpen && (
+        <div className="z-bottom-sheet-overlay" onClick={() => setIsSortOpen(false)}>
+          <div className="z-bottom-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle"></div>
+            <div className="z-sheet-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Sorting</span>
+              <button 
+                style={{ background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', padding: '4px' }}
+                onClick={() => setIsSortOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div style={{ padding: '0 8px 12px 8px' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', fontWeight: 'bold', display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>SORT BY</span>
+              <div className="menu-options" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px' }}>
+                <button 
+                  className={`z-sheet-option ${sortBy === 'name' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortBy('name'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>Name</span>
+                  {sortBy === 'name' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+                <button 
+                  className={`z-sheet-option ${sortBy === 'size' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortBy('size'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>Size</span>
+                  {sortBy === 'size' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+                <button 
+                  className={`z-sheet-option ${sortBy === 'date' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortBy('date'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>Date</span>
+                  {sortBy === 'date' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+                <button 
+                  className={`z-sheet-option ${sortBy === 'type' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortBy('type'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>File type</span>
+                  {sortBy === 'type' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+              </div>
+
+              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', fontWeight: 'bold', display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>ORDER</span>
+              <div className="menu-options" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <button 
+                  className={`z-sheet-option ${sortOrder === 'asc' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortOrder('asc'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>Ascending</span>
+                  {sortOrder === 'asc' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+                <button 
+                  className={`z-sheet-option ${sortOrder === 'desc' ? 'active' : ''}`} 
+                  onClick={() => { triggerHaptic('light'); setSortOrder('desc'); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span>Descending</span>
+                  {sortOrder === 'desc' && <Check size={16} style={{ color: 'var(--accent-color)' }} />}
+                </button>
+              </div>
+            </div>
+
+            <button 
+              className="z-sheet-option" 
+              onClick={() => setIsSortOpen(false)} 
+              style={{ marginTop: '8px', justifyContent: 'center', background: 'rgba(255,255,255,0.03)', fontWeight: '600' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── 6. Bottom sheet Dialog Options ─────────────────────────── */}
