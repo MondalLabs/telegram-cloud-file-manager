@@ -31,7 +31,17 @@ bot = Client(
 # ── FastAPI health server ─────────────────────────────────────────────────────
 # Render Web Service requires the process to bind a port; this lightweight
 # server satisfies that requirement and gives UptimeRobot a ping target.
+from fastapi.middleware.cors import CORSMiddleware
+
 health_app = FastAPI(title="Health Server")
+
+health_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for the Mini App
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @health_app.get("/health")

@@ -208,3 +208,94 @@ async def route_to_cdn(
         mime_type=mime_type,
         dump_message_id=copied_msg.id,
     )
+
+
+async def move_file(
+    file_doc_id: PydanticObjectId,
+    target_folder_id: Optional[PydanticObjectId]
+) -> Optional[File]:
+    """
+    Move a file to a target folder.
+    Resolves name conflicts in the target folder by adding a suffix.
+    """
+    f = await File.get(file_doc_id)
+    if f is None:
+        return None
+
+    # Resolve name conflicts
+    name = f.name
+    if "." in name:
+        base, ext = name.rsplit(".", 1)
+        ext = f".{ext}"
+    else:
+        base, ext = name, ""
+
+    suffix = ""
+    counter = 1
+    while True:
+        existing = await File.find_one(
+            File.folder_id == target_folder_id,
+            File.name == f"{base}{suffix}{ext}",
+            File.id != file_doc_id
+        )
+        if not existing:
+            name = f"{base}{suffix}{ext}"
+            break
+        suffix = f"_{counter}"
+        counter += 1
+
+    f.folder_id = target_folder_id
+    f.name = name
+    await f.save()
+    return f
+
+
+async def copy_file(
+    file_doc_id: PydanticObjectId,
+    target_folder_id: Optional[PydanticObjectId],
+    uploaded_by: int
+) -> Optional[File]:
+    """
+    Copy a file to a target folder.
+    Resolves name conflicts in the target folder.
+    """
+    f = await File.get(file_doc_id)
+    if f is None:
+        return None
+
+    # Resolve name conflicts
+    name = f.name
+    if "." in name:
+        base, ext = name.rsplit(".", 1)
+        ext = f".{ext}"
+    else:
+        base, ext = name, ""
+
+    suffix = ""
+    counter = 1
+    while True:
+        existing = await File.find_one(
+            File.folder_id == target_folder_id,
+            File.name == f"{base}{suffix}{ext}"
+        )
+        if not existing:
+            name = f"{base}{suffix}{ext}"
+            break
+        suffix = f"_{counter}"
+        counter += 1
+
+    new_file = File(
+        name=name,
+        file_id=f.file_id,
+        file_type=f.file_type,
+        folder_id=target_folder_id,
+        dump_message_id=f.dump_message_id,
+        file_size=f.file_size,
+        duration=f.duration,
+        width=f.width,
+        height=f.height,
+        mime_type=f.mime_type,
+        uploaded_by=uploaded_by
+    )
+    await new_file.insert()
+    return new_file

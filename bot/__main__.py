@@ -77,12 +77,13 @@ _loop = asyncio.get_event_loop()
 # Step 1: DB init on the current event loop
 _loop.run_until_complete(_init_db())
 
-# Step 2: Uvicorn health server in a daemon thread (separate loop, no conflict)
-threading.Thread(
-    target=lambda: uvicorn.run(health_app, host="0.0.0.0", port=settings.health_port, log_level="warning"),
-    daemon=True,
-    name="uvicorn",
-).start()
+# Step 2: Uvicorn health server on the same event loop (avoids loop conflict for Beanie)
+from bot.api import router as api_router
+health_app.include_router(api_router)
+
+config = uvicorn.Config(health_app, host="0.0.0.0", port=settings.health_port, log_level="warning")
+server = uvicorn.Server(config)
+_loop.create_task(server.serve())
 log.info("Health server starting on port %d...", settings.health_port)
 
 
