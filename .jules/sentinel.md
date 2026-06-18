@@ -21,3 +21,7 @@
 **Vulnerability:** File names extracted from uploaded Telegram media (e.g., via `getattr(media, "file_name", None)`) could be arbitrarily long. When rendered in Markdown messages, they exceeded Pyrogram API limits (`MessageTooLong` error), causing a persistent Denial of Service (DoS) for handlers processing those files.
 **Learning:** External inputs, even seemingly benign ones like file names from Telegram media, must be treated as untrusted and can cause application crashes if their length is not constrained before storage and rendering.
 **Prevention:** Always truncate or limit the length of file names (e.g., to 128 characters) immediately after extraction and before writing to the database or passing to the Pyrogram client, while taking care to preserve the file extension if applicable.
+## 2024-05-24 - Unhandled PydanticObjectId Validation
+**Vulnerability:** Instantiating `PydanticObjectId` from untrusted user input without validation in Pyrogram callback endpoints.
+**Learning:** `PydanticObjectId` will raise `bson.errors.InvalidId` exceptions if given invalid hex strings. Untrusted callback query payloads lacking `is_valid` checks could crash the application or cause DoS conditions.
+**Prevention:** Always validate `folder_id_str` or other IDs from user input with `PydanticObjectId.is_valid()` before instantiation in `handlers/*.py` and other untrusted inputs.
