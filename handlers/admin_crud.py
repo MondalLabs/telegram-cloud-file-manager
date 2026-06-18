@@ -182,6 +182,10 @@ async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
     parts = decode(query.data)
     folder_id = parts[1]
 
+    if not PydanticObjectId.is_valid(folder_id):
+        await query.answer("❌ Invalid folder ID.", show_alert=True)
+        return
+
     folder = await folder_service.get_folder(PydanticObjectId(folder_id))
     if folder is None:
         await query.answer("❌ Folder not found.", show_alert=True)
@@ -215,6 +219,10 @@ async def delete_folder_confirm(client, query: CallbackQuery, user: User) -> Non
     parts = decode(query.data)
     folder_id = parts[1]
 
+    if not PydanticObjectId.is_valid(folder_id):
+        await query.answer("❌ Invalid folder ID.", show_alert=True)
+        return
+
     folder = await folder_service.get_folder(PydanticObjectId(folder_id))
     if folder is None:
         await query.answer("❌ Folder not found.", show_alert=True)
@@ -243,6 +251,10 @@ async def rename_file_start(client, query: CallbackQuery, user: User) -> None:
     await query.answer()
     parts = decode(query.data)
     file_doc_id = parts[1]
+
+    if not PydanticObjectId.is_valid(file_doc_id):
+        await query.answer("❌ Invalid file ID.", show_alert=True)
+        return
 
     file_doc = await file_service.get_file(PydanticObjectId(file_doc_id))
     if file_doc is None:
@@ -274,6 +286,10 @@ async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
     await query.answer()
     parts = decode(query.data)
     file_doc_id = parts[1]
+
+    if not PydanticObjectId.is_valid(file_doc_id):
+        await query.answer("❌ Invalid file ID.", show_alert=True)
+        return
 
     file_doc = await file_service.get_file(PydanticObjectId(file_doc_id))
     if file_doc is None:
@@ -310,6 +326,9 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     if action == ACTION_DF:
         # Delete folder tree
+        if not PydanticObjectId.is_valid(target_id):
+            await query.answer("❌ Invalid folder ID.", show_alert=True)
+            return
         folder = await folder_service.get_folder(PydanticObjectId(target_id))
         parent_id = str(folder.parent_id) if folder and folder.parent_id else "root"
         try:
@@ -323,6 +342,9 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     elif action == ACTION_DEL_FILE:
         # Delete single file
+        if not PydanticObjectId.is_valid(target_id):
+            await query.answer("❌ Invalid file ID.", show_alert=True)
+            return
         file_doc = await file_service.get_file(PydanticObjectId(target_id))
         folder_id = str(file_doc.folder_id) if file_doc and file_doc.folder_id else "root"
         success = await file_service.delete_file(PydanticObjectId(target_id))
@@ -390,6 +412,12 @@ async def _handle_create_folder(client, message: Message, user: User, data: dict
         return
 
     parent_id_str = data.get("parent_id", "root")
+
+    if parent_id_str != "root" and not PydanticObjectId.is_valid(parent_id_str):
+        await message.reply("❌ Invalid parent folder ID. Please start over.", reply_markup=cancel_only_kb())
+        await fsm_service.clear_state(user.telegram_id)
+        return
+
     parent_id_obj = PydanticObjectId(parent_id_str) if parent_id_str != "root" else None
 
     try:
@@ -416,6 +444,11 @@ async def _handle_rename_folder(client, message: Message, user: User, data: dict
     folder_id = data.get("folder_id")
     back_folder_id = data.get("back_folder_id", "root")
 
+    if not PydanticObjectId.is_valid(folder_id):
+        await message.reply("❌ Invalid folder ID. Please start over.", reply_markup=cancel_only_kb())
+        await fsm_service.clear_state(user.telegram_id)
+        return
+
     try:
         folder = await folder_service.rename_folder(PydanticObjectId(folder_id), new_name)
         await fsm_service.clear_state(user.telegram_id)
@@ -435,6 +468,11 @@ async def _handle_rename_file(client, message: Message, user: User, data: dict) 
 
     file_doc_id = data.get("file_doc_id")
     folder_id = data.get("folder_id", "root")
+
+    if not PydanticObjectId.is_valid(file_doc_id):
+        await message.reply("❌ Invalid file ID. Please start over.", reply_markup=cancel_only_kb())
+        await fsm_service.clear_state(user.telegram_id)
+        return
 
     file_doc = await file_service.rename_file(PydanticObjectId(file_doc_id), new_name)
     await fsm_service.clear_state(user.telegram_id)
