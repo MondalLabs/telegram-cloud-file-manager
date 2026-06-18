@@ -440,6 +440,11 @@ async def toggle_exception_callback(client, query: CallbackQuery, user: User) ->
         await query.answer("❌ User not found.", show_alert=True)
         return
 
+    # Security Enhancement: Validate user input from callback query to prevent unhandled InvalidId exceptions
+    if not PydanticObjectId.is_valid(folder_id_str):
+        await query.answer("❌ Invalid folder ID.", show_alert=True)
+        return
+
     folder_id = PydanticObjectId(folder_id_str)
 
     if action == "uallow":
