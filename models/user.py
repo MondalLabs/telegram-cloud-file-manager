@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from beanie import Document
+from beanie import Document, PydanticObjectId
 from pydantic import Field
 from pymongo import IndexModel, ASCENDING
 
@@ -41,6 +41,8 @@ class User(Document):
 
     # ── UI state (persisted so it survives server restarts) ───────────────────
     last_menu_id: Optional[int] = None     # Telegram message_id of last bot menu
+    allowed_folders: list[PydanticObjectId] = Field(default_factory=list)
+    blocked_folders: list[PydanticObjectId] = Field(default_factory=list)
 
     class Settings:
         name = "users"

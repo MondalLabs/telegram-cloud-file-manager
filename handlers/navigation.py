@@ -35,6 +35,7 @@ from keyboards.navigation_kb import build_folder_keyboard, build_empty_folder_ke
 from keyboards.admin_kb import folder_actions_kb, file_actions_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
+import services.user_service as user_service
 from utils.callback_data import (
     decode,
     encode,
@@ -91,11 +92,32 @@ async def render_folder(
             str(current_folder.parent_id) if current_folder.parent_id else "root"
         )
 
-    # Fetch counts concurrently
-    folder_count, file_count = await asyncio.gather(
-        folder_service.count_children(parent_id_obj),
-        file_service.count_files_in_folder(parent_id_obj),
-    )
+    # ── Exception Permissions Gate ──
+    if parent_id_obj is not None:
+        if not await user_service.has_folder_access(user, parent_id_obj):
+            if isinstance(update, CallbackQuery):
+                await update.answer("🔒 Access Denied: Restricted folder.", show_alert=True)
+            else:
+                await update.reply("🔒 Access Denied: Restricted folder.")
+            return
+
+    # Fetch all folders and files for filtering
+    all_folders = await folder_service.get_children(parent_id_obj)
+    all_files = await file_service.get_files_in_folder(parent_id_obj)
+
+    # Filter by user permissions
+    allowed_folders = []
+    for f in all_folders:
+        if await user_service.has_folder_access(user, f.id):
+            allowed_folders.append(f)
+
+    allowed_files = []
+    # Since files are inside this parent folder, if parent folder is accessible, all files inside are.
+    # Root files (parent_id_obj is None) are always accessible since root has_folder_access is True.
+    allowed_files = all_files
+
+    folder_count = len(allowed_folders)
+    file_count = len(allowed_files)
 
     # Build message text
     text = (
@@ -128,35 +150,11 @@ async def render_folder(
         start = (page - 1) * per_page
         end = start + per_page
 
-        folders_to_skip = min(start, folder_count)
-        folders_to_fetch = min(end - start, max(0, folder_count - start))
-
-        files_start = max(0, start - folder_count)
-        files_to_skip = min(files_start, file_count)
-        files_to_fetch = min(per_page - folders_to_fetch, max(0, file_count - files_start))
-
-        # Fetch only the required page items concurrently
-        fetch_tasks = []
-        if folders_to_fetch > 0:
-            fetch_tasks.append(
-                folder_service.get_children_paginated(parent_id_obj, folders_to_skip, folders_to_fetch)
-            )
-        else:
-            fetch_tasks.append(asyncio.sleep(0, result=[]))
-
-        if files_to_fetch > 0:
-            fetch_tasks.append(
-                file_service.get_files_in_folder_paginated(parent_id_obj, files_to_skip, files_to_fetch)
-            )
-        else:
-            fetch_tasks.append(asyncio.sleep(0, result=[]))
-
-        page_folders, page_files = await asyncio.gather(*fetch_tasks)
-
-        combined_items = [("folder", f) for f in page_folders] + [("file", f) for f in page_files]
+        combined_items = [("folder", f) for f in allowed_folders] + [("file", f) for f in allowed_files]
+        page_items = combined_items[start:end]
 
         pg = Page(
-            items=combined_items,
+            items=page_items,
             page=page,
             total_pages=total_pages,
             total_items=total_items,

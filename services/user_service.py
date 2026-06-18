@@ -127,3 +127,75 @@ async def find_user_by_id_doc(user_doc_id: str) -> Optional[User]:
         return await User.get(PydanticObjectId(user_doc_id))
     except Exception:
         return None
+
+
+async def has_folder_access(user: User, folder_id: Optional[PydanticObjectId]) -> bool:
+    """
+    Evaluate folder access exceptions:
+    1. If user is OWNER: access is always granted.
+    2. If folder_id is None (Root): viewable by default.
+    3. If any folder in the ancestor chain is in user.blocked_folders: access is blocked.
+    4. If user.allowed_folders is empty: access is allowed by default.
+    5. If any folder in the ancestor chain is in user.allowed_folders: access is explicitly allowed.
+    6. Otherwise: blocked (whitelisted model).
+    """
+    if user.role == UserRole.OWNER:
+        return True
+
+    if folder_id is None:
+        return True
+
+    # Build ancestor path (including folder_id itself)
+    import services.folder_service as folder_service
+    path_ids = []
+    curr_id = folder_id
+    while curr_id is not None:
+        path_ids.append(curr_id)
+        folder = await folder_service.get_folder(curr_id)
+        if folder is None:
+            break
+        curr_id = folder.parent_id
+
+    # Check rule 1: explicitly blocked folder or ancestor
+    blocked_set = set(user.blocked_folders)
+    for pid in path_ids:
+        if pid in blocked_set:
+            return False
+
+    # Check rule 2: if no explicit whitelisting exists, then it's allowed by default (since not blocked)
+    if not user.allowed_folders:
+        return True
+
+    # Check rule 3: explicitly allowed folder or ancestor
+    allowed_set = set(user.allowed_folders)
+    for pid in path_ids:
+        if pid in allowed_set:
+            return True
+
+    # Whitelist model: if not explicitly allowed and allow list is not empty, it's blocked.
+    return False
+
+
+async def allow_folder_for_user(user: User, folder_id: PydanticObjectId) -> None:
+    """Explicitly allow a folder for a user. Clears it from blocked if present."""
+    if folder_id in user.blocked_folders:
+        user.blocked_folders.remove(folder_id)
+    if folder_id not in user.allowed_folders:
+        user.allowed_folders.append(folder_id)
+    await user.save()
+
+
+async def block_folder_for_user(user: User, folder_id: PydanticObjectId) -> None:
+    """Explicitly block a folder for a user. Clears it from allowed if present."""
+    if folder_id in user.allowed_folders:
+        user.allowed_folders.remove(folder_id)
+    if folder_id not in user.blocked_folders:
+        user.blocked_folders.append(folder_id)
+    await user.save()
+
+
+async def reset_folder_permissions_for_user(user: User) -> None:
+    """Clear all folder allow and block overrides for a user."""
+    user.allowed_folders = []
+    user.blocked_folders = []
+    await user.save()

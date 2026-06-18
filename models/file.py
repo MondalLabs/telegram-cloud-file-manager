@@ -30,6 +30,8 @@ class File(Document):
 
     # ── Hierarchy ─────────────────────────────────────────────────────────────
     folder_id: Optional[PydanticObjectId] = None  # None = root level
+    dump_message_id: Optional[int] = None         # Message ID inside the storage dump group
+
 
     # ── Auto-extracted metadata (Safeguard #4: getattr-safe access) ───────────
     file_size: Optional[int] = None        # Bytes
@@ -74,6 +76,10 @@ class File(Document):
         if self.width and self.height:
             parts.append(f"{self.width}×{self.height}")
         if self.file_size:
-            mb = self.file_size / (1024 * 1024)
-            parts.append(f"{mb:.1f} MB")
+            if self.file_size >= 1024 * 1024 * 1024:
+                gb = self.file_size / (1024 * 1024 * 1024)
+                parts.append(f"{gb:.2f} GB")
+            else:
+                mb = self.file_size / (1024 * 1024)
+                parts.append(f"{mb:.1f} MB")
         return " · ".join(parts) if parts else "media"

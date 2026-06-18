@@ -28,6 +28,7 @@ from beanie import PydanticObjectId
 
 from bot.client import bot
 from models.user import User, UserRole
+from models.folder import Folder
 from middlewares.access_control import owner_only
 from keyboards.admin_kb import user_management_kb, admin_dashboard_kb
 from keyboards.confirm_kb import confirm_revoke_kb, cancel_only_kb
@@ -158,20 +159,15 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
         total_items=total_items,
     )
 
-    # Build user list rows — each user gets a Revoke button
+    # Build user list rows — each user is a button that opens their detailed profile view
     rows = []
     for u in pg.items:
         name = u.display_name
-        since = u.approved_at.strftime("%Y-%m-%d") if u.approved_at else "unknown"
         rows.append([
             InlineKeyboardButton(
                 text=f"👤 {name} ({u.telegram_id})",
-                callback_data=encode("noop", "toast", f"User ID: {u.telegram_id}"),
-            ),
-            InlineKeyboardButton(
-                text="🚫 Revoke",
-                callback_data=encode(ACTION_USR_REVOKE, str(u.id)),
-            ),
+                callback_data=encode("udetail", str(u.id)),
+            )
         ])
 
     # Pagination row
@@ -198,7 +194,7 @@ async def list_approved_users(client, query: CallbackQuery, user: User) -> None:
 
     await query.edit_message_text(
         f"📋 **Approved Users** ({pg.total_items} total)\n\n"
-        f"Tap 🚫 Revoke to remove access from a user.",
+        f"Tap a user to view their profile and manage folder exceptions.",
         reply_markup=InlineKeyboardMarkup(rows),
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -270,3 +266,199 @@ async def revoke_confirmed(client, query: CallbackQuery, user: User) -> None:
         reply_markup=user_management_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
+
+
+# ── User Details Exception View ───────────────────────────────────────────────
+
+@bot.on_callback_query(filters.regex(r"^udetail:"))
+@owner_only
+async def user_detail_callback(client, query: CallbackQuery, user: User) -> None:
+    await query.answer()
+    parts = decode(query.data)
+    user_doc_id = parts[1]
+
+    target = await user_service.find_user_by_id_doc(user_doc_id)
+    if target is None:
+        await query.answer("❌ User not found.", show_alert=True)
+        return
+
+    # Build allowed/blocked folders names lists
+    allowed_names = []
+    for fid in target.allowed_folders:
+        folder = await Folder.get(fid)
+        if folder:
+            allowed_names.append(folder.name)
+
+    blocked_names = []
+    for fid in target.blocked_folders:
+        folder = await Folder.get(fid)
+        if folder:
+            blocked_names.append(folder.name)
+
+    allowed_str = ", ".join(allowed_names) if allowed_names else "All folders (Default)"
+    blocked_str = ", ".join(blocked_names) if blocked_names else "None"
+
+    since = target.approved_at.strftime("%Y-%m-%d") if target.approved_at else "unknown"
+
+    text = (
+        f"👤 **User Profile**\n\n"
+        f"Name: **{escape_markdown(target.display_name)}**\n"
+        f"Telegram ID: `{target.telegram_id}`\n"
+        f"Approved on: `{since}`\n\n"
+        f"🟢 **Allowed Exceptions**:\n"
+        f"_{escape_markdown(allowed_str)}_\n\n"
+        f"🔴 **Blocked Exceptions**:\n"
+        f"_{escape_markdown(blocked_str)}_\n\n"
+        f"💡 _Exceptions apply recursively to subfolders._"
+    )
+
+    buttons = [
+        [
+            InlineKeyboardButton("🟢 Allow Folder", callback_data=encode("uallow", user_doc_id, 1)),
+            InlineKeyboardButton("🔴 Block Folder", callback_data=encode("ublock", user_doc_id, 1)),
+        ],
+        [
+            InlineKeyboardButton("⚪ Reset Permissions", callback_data=encode("ureset", user_doc_id)),
+        ],
+        [
+            InlineKeyboardButton("🚫 Revoke Access", callback_data=encode(ACTION_USR_REVOKE, user_doc_id)),
+        ],
+        [
+            InlineKeyboardButton("⬅️ Back to List", callback_data=encode(ACTION_USR_LIST, 1)),
+        ]
+    ]
+
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+@bot.on_callback_query(filters.regex(r"^ureset:"))
+@owner_only
+async def user_reset_permissions_callback(client, query: CallbackQuery, user: User) -> None:
+    parts = decode(query.data)
+    user_doc_id = parts[1]
+
+    target = await user_service.find_user_by_id_doc(user_doc_id)
+    if target is None:
+        await query.answer("❌ User not found.", show_alert=True)
+        return
+
+    await user_service.reset_folder_permissions_for_user(target)
+    await query.answer("✅ Permissions reset successfully.")
+
+    # Redirect to user details view
+    query.data = encode("udetail", user_doc_id)
+    await user_detail_callback(client, query, user)
+
+
+@bot.on_callback_query(filters.regex(r"^(uallow|ublock):"))
+@owner_only
+async def user_folder_select_callback(client, query: CallbackQuery, user: User) -> None:
+    await query.answer()
+    parts = decode(query.data)
+    action = parts[0]  # "uallow" or "ublock"
+    user_doc_id = parts[1]
+    page = int(parts[2]) if len(parts) > 2 else 1
+
+    target = await user_service.find_user_by_id_doc(user_doc_id)
+    if target is None:
+        await query.answer("❌ User not found.", show_alert=True)
+        return
+
+    folders = await Folder.find_all().sort(+Folder.name).to_list()
+
+    if not folders:
+        await query.answer("⚠️ No virtual folders exist yet.", show_alert=True)
+        return
+
+    total_items = len(folders)
+    per_page = cfg.items_per_page
+    total_pages = max(1, (total_items + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_folders = folders[start:end]
+
+    pg = Page(
+        items=page_folders,
+        page=page,
+        total_pages=total_pages,
+        total_items=total_items,
+    )
+
+    rows = []
+    mode_str = "Allow" if action == "uallow" else "Block"
+    color_emoji = "🟢" if action == "uallow" else "🔴"
+
+    for f in pg.items:
+        exists = f.id in (target.allowed_folders if action == "uallow" else target.blocked_folders)
+        indicator = "  [Active]" if exists else ""
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{f.name}{indicator}",
+                callback_data=encode("addexc", action, user_doc_id, str(f.id)),
+            )
+        ])
+
+    if pg.total_pages > 1:
+        nav = []
+        if pg.has_prev:
+            nav.append(InlineKeyboardButton("◀️", callback_data=encode(action, user_doc_id, pg.prev_page)))
+        else:
+            nav.append(InlineKeyboardButton("·", callback_data=encode("noop", "toast", "🚫 No more pages")))
+        nav.append(InlineKeyboardButton(f"{pg.page}/{pg.total_pages}", callback_data=encode("noop", "toast", f"📄 Page {pg.page} of {pg.total_pages}")))
+        if pg.has_next:
+            nav.append(InlineKeyboardButton("▶️", callback_data=encode(action, user_doc_id, pg.next_page)))
+        else:
+            nav.append(InlineKeyboardButton("·", callback_data=encode("noop", "toast", "🚫 No more pages")))
+        rows.append(nav)
+
+    rows.append([InlineKeyboardButton("⬅️ Back to Profile", callback_data=encode("udetail", user_doc_id))])
+
+    await query.edit_message_text(
+        f"{color_emoji} **Select Folder to {mode_str}**\n\n"
+        f"Select a virtual folder to toggle as an exception for **{escape_markdown(target.display_name)}**.",
+        reply_markup=InlineKeyboardMarkup(rows),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+@bot.on_callback_query(filters.regex(r"^addexc:"))
+@owner_only
+async def toggle_exception_callback(client, query: CallbackQuery, user: User) -> None:
+    parts = decode(query.data)
+    action = parts[1]  # "uallow" or "ublock"
+    user_doc_id = parts[2]
+    folder_id_str = parts[3]
+
+    target = await user_service.find_user_by_id_doc(user_doc_id)
+    if target is None:
+        await query.answer("❌ User not found.", show_alert=True)
+        return
+
+    folder_id = PydanticObjectId(folder_id_str)
+
+    if action == "uallow":
+        if folder_id in target.allowed_folders:
+            target.allowed_folders.remove(folder_id)
+            await target.save()
+            await query.answer("Removed from allowed exceptions.")
+        else:
+            await user_service.allow_folder_for_user(target, folder_id)
+            await query.answer("Added to allowed exceptions.")
+    else:
+        if folder_id in target.blocked_folders:
+            target.blocked_folders.remove(folder_id)
+            await target.save()
+            await query.answer("Removed from blocked exceptions.")
+        else:
+            await user_service.block_folder_for_user(target, folder_id)
+            await query.answer("Added to blocked exceptions.")
+
+    # Refresh folder select list
+    query.data = encode(action, user_doc_id, 1)
+    await user_folder_select_callback(client, query, user)

@@ -443,3 +443,140 @@ async def _handle_rename_file(client, message: Message, user: User, data: dict) 
     else:
         await message.reply("❌ File not found.")
     await _refresh_folder(client, message, folder_id=folder_id, user=user)
+
+
+# ── CDN Health Check ──────────────────────────────────────────────────────────
+
+@bot.on_callback_query(filters.regex(r"^healthcheck$"))
+@owner_only
+async def run_health_check_callback(client, query: CallbackQuery, user: User) -> None:
+    """Scan all files in the database and verify their existence in the Telegram dump group CDN."""
+    await query.answer()
+
+    from models.settings import BotSettings
+    from models.file import File
+    from bot.config import settings as cfg
+    import services.folder_service as folder_service
+    import asyncio
+
+    dump_chat_id = await BotSettings.get_dump_chat_id(fallback=cfg.dump_chat_id)
+    if dump_chat_id is None:
+        await query.edit_message_text(
+            "❌ **Health Check Aborted**\n\nDump storage group is not configured. Please run /setup inside the dump group first.",
+            reply_markup=admin_dashboard_kb(),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    await query.edit_message_text(
+        "🩺 **CDN Health Check**\n\nRetrieving file references from database...",
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+    all_files = await File.find_all().to_list()
+    total_files = len(all_files)
+
+    if total_files == 0:
+        await query.edit_message_text(
+            "🩺 **CDN Health Report**\n\nTotal Files: **0**\n\n✅ Library is empty. Nothing to verify.",
+            reply_markup=admin_dashboard_kb(),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    # Categorize files
+    legacy_files = []
+    verifiable_files = []
+
+    for f in all_files:
+        if f.dump_message_id is None:
+            legacy_files.append(f)
+        else:
+            verifiable_files.append(f)
+
+    missing_files = []
+    verified_count = 0
+    scanned_count = 0
+    total_verifiable = len(verifiable_files)
+
+    # Batch verification
+    batch_size = 200
+    for i in range(0, total_verifiable, batch_size):
+        batch = verifiable_files[i : i + batch_size]
+        msg_ids = [f.dump_message_id for f in batch]
+
+        # Show progress
+        progress_text = (
+            f"🩺 **CDN Health Check**\n\n"
+            f"Scanning: **{scanned_count + len(legacy_files)}/{total_files}** files processed...\n"
+            f"Verified active: **{verified_count}**\n"
+            f"Detected missing: **{len(missing_files)}**"
+        )
+        try:
+            await query.edit_message_text(progress_text, parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            pass  # Ignore unchanged progress edits
+
+        try:
+            tg_msgs = await client.get_messages(chat_id=dump_chat_id, message_ids=msg_ids)
+            if not isinstance(tg_msgs, list):
+                tg_msgs = [tg_msgs]
+        except Exception as e:
+            log.error("Error fetching messages in batch: %s", e)
+            await query.edit_message_text(
+                f"❌ **Health Check Error**\n\nCould not query dump group. Internal error: `{e}`",
+                reply_markup=admin_dashboard_kb(),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+        # Map results
+        for idx, f in enumerate(batch):
+            tg_msg = tg_msgs[idx] if idx < len(tg_msgs) else None
+            is_deleted = tg_msg is None or getattr(tg_msg, "empty", False)
+
+            if is_deleted:
+                # Resolve folder path
+                path_str = "Root"
+                if f.folder_id:
+                    try:
+                        crumbs = await folder_service.get_breadcrumbs(f.folder_id)
+                        path_str = " > ".join(c.name for c in crumbs)
+                    except Exception:
+                        path_str = "Unknown Folder"
+                missing_files.append((f, path_str))
+            else:
+                verified_count += 1
+
+        scanned_count += len(batch)
+
+        # Rate limit safeguard
+        await asyncio.sleep(1.0)
+
+    # Build final report
+    lines = [
+        "🩺 **CDN Health Report**\n",
+        f"Total Files Indexed: **{total_files}**",
+        f"Verified Active: **{verified_count}**",
+    ]
+    if legacy_files:
+        lines.append(f"Legacy (Unverifiable): **{len(legacy_files)}**")
+
+    if missing_files:
+        lines.append(f"\n⚠️ **Detected {len(missing_files)} broken file pointers:**")
+        # List up to 20 broken files so message doesn't exceed 4096 characters limit
+        for f, path in missing_files[:20]:
+            lines.append(f"- 📁 `{path}`/🎬 `{escape_markdown(f.name)}` (ID: `{f.id}`)")
+        if len(missing_files) > 20:
+            lines.append(f"\n_...and {len(missing_files) - 20} more broken files._")
+        lines.append("\n💡 _To fix this, delete these files from database or re-upload them._")
+    else:
+        lines.append("\n✅ **All active file pointers are verified and operational!**")
+
+    report_text = "\n".join(lines)
+
+    await query.edit_message_text(
+        report_text,
+        reply_markup=admin_dashboard_kb(),
+        parse_mode=ParseMode.MARKDOWN,
+    )

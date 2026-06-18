@@ -39,6 +39,12 @@ def admin_dashboard_kb() -> InlineKeyboardMarkup:
                 callback_data="usrmenu",
             ),
         ],
+        [
+            InlineKeyboardButton(
+                text="🩺 Run Health Check",
+                callback_data="healthcheck",
+            ),
+        ],
     ])
 
 

@@ -30,6 +30,7 @@ from models.user import User
 from middlewares.access_control import approved_and_above
 import services.file_service as file_service
 import services.folder_service as folder_service
+import services.user_service as user_service
 from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
@@ -82,8 +83,12 @@ async def _build_caption(file_doc, client=None) -> str:
     if file_doc.width and file_doc.height:
         meta.append(f"📐 {file_doc.width}×{file_doc.height}")
     if file_doc.file_size:
-        mb = file_doc.file_size / (1024 * 1024)
-        meta.append(f"💾 {mb:.1f} MB")
+        if file_doc.file_size >= 1024 * 1024 * 1024:
+            gb = file_doc.file_size / (1024 * 1024 * 1024)
+            meta.append(f"💾 {gb:.2f} GB")
+        else:
+            mb = file_doc.file_size / (1024 * 1024)
+            meta.append(f"💾 {mb:.1f} MB")
 
     meta_line = "  ·  ".join(meta) if meta else ""
 
@@ -132,6 +137,11 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
 
     if file_doc is None:
         await query.answer("❌ File not found — it may have been deleted.", show_alert=True)
+        return
+
+    # Check permission exception
+    if not await user_service.has_folder_access(user, file_doc.folder_id):
+        await query.answer("🔒 Access Denied: Restricted folder.", show_alert=True)
         return
 
     chat_id = query.from_user.id

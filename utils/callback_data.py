@@ -81,3 +81,8 @@ ACTION_FILE_INFO   = "fli"    # fli:{file_doc_id}          file action menu
 ACTION_USR_APPROVE = "ua"     # ua                         start approve flow
 ACTION_USR_REVOKE  = "ur"     # ur:{user_doc_id}           revoke specific user
 ACTION_USR_LIST    = "ul"     # ul:{page}                  list approved users
+
+# Folder permissions
+ACTION_ALLOW_DIR = "ad"       # ad:{user_doc_id}:{folder_id}:{page}
+ACTION_BLOCK_DIR = "bd"       # bd:{user_doc_id}:{folder_id}:{page}
+ACTION_RESET_DIR = "rd"       # rd:{user_doc_id}

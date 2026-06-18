@@ -70,6 +70,7 @@ async def create_file(
     width: Optional[int] = None,
     height: Optional[int] = None,
     mime_type: Optional[str] = None,
+    dump_message_id: Optional[int] = None,
 ) -> File:
     """Insert a new File document. All metadata already extracted by caller."""
     f = File(
@@ -83,6 +84,7 @@ async def create_file(
         width=width,
         height=height,
         mime_type=mime_type,
+        dump_message_id=dump_message_id,
     )
     await f.insert()
     return f
@@ -162,7 +164,7 @@ async def route_to_cdn(
     )
 
     # Extract the permanent file_id from the dump group copy
-    copied_media = copied_msg.video or copied_msg.document
+    copied_media = copied_msg.video or copied_msg.document or copied_msg.photo
     if copied_media is None:
         raise RuntimeError("CDN copy failed — no media in forwarded message.")
 
@@ -204,4 +206,5 @@ async def route_to_cdn(
         width=width,
         height=height,
         mime_type=mime_type,
+        dump_message_id=copied_msg.id,
     )
