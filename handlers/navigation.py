@@ -101,8 +101,11 @@ async def render_folder(
             return
 
     # Fetch all folders and files for filtering
-    all_folders = await folder_service.get_children(parent_id_obj)
-    all_files = await file_service.get_files_in_folder(parent_id_obj)
+    # ⚡ Bolt Optimization: Fetch folders and files concurrently to prevent sequential latency
+    all_folders, all_files = await asyncio.gather(
+        folder_service.get_children(parent_id_obj),
+        file_service.get_files_in_folder(parent_id_obj)
+    )
 
     # Filter by user permissions
     allowed_folders = []
