@@ -261,7 +261,8 @@ export default function App() {
   // Back button setup
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (tg?.BackButton) {
+    const isBackButtonSupported = tg && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1');
+    if (isBackButtonSupported && tg.BackButton) {
       if (currentFolderId && currentFolderId !== 'root') {
         tg.BackButton.show();
         const handleBack = () => {
