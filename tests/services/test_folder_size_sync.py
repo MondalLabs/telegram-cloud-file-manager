@@ -28,7 +28,7 @@ async def test_update_folder_size_hierarchy(mock_folder_class):
     mock_folder_class.get = AsyncMock(side_effect=get_mock_folder)
     mock_collection = MagicMock()
     mock_collection.update_one = AsyncMock()
-    mock_folder_class.get_motor_collection.return_value = mock_collection
+    mock_folder_class.get_pymongo_collection.return_value = mock_collection
 
     await update_folder_size_hierarchy(child_id, 500)
 

@@ -165,7 +165,7 @@ async def test_recalculate_all_folder_sizes(mock_file_class, mock_folder_class):
     
     mock_collection = MagicMock()
     mock_collection.update_one = AsyncMock()
-    mock_folder_class.get_motor_collection.return_value = mock_collection
+    mock_folder_class.get_pymongo_collection.return_value = mock_collection
     
     await recalculate_all_folder_sizes()
     mock_collection.update_one.assert_called_once_with({"_id": fid}, {"$set": {"size": 9000}})
@@ -254,7 +254,7 @@ async def test_update_folder_size_hierarchy(mock_folder_class):
     
     mock_collection = MagicMock()
     mock_collection.update_one = AsyncMock()
-    mock_folder_class.get_motor_collection.return_value = mock_collection
+    mock_folder_class.get_pymongo_collection.return_value = mock_collection
     
     await update_folder_size_hierarchy(child_id, 100)
     assert mock_collection.update_one.call_count == 2
@@ -500,7 +500,7 @@ async def test_recalculate_all_folder_sizes_missing_folder_or_zero_size(mock_fil
     
     mock_motor = MagicMock()
     mock_motor.update_one = AsyncMock()
-    mock_folder_class.get_motor_collection = MagicMock(return_value=mock_motor)
+    mock_folder_class.get_pymongo_collection = MagicMock(return_value=mock_motor)
     
     await recalculate_all_folder_sizes()
     # Verify updates are made

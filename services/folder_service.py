@@ -364,7 +364,7 @@ async def update_folder_size_hierarchy(folder_id: Optional[PydanticObjectId], de
             break
         
         # Atomically increment/decrement size field in DB
-        await Folder.get_motor_collection().update_one(
+        await Folder.get_pymongo_collection().update_one(
             {"_id": folder.id},
             {"$inc": {"size": delta}}
         )
@@ -409,7 +409,7 @@ async def recalculate_all_folder_sizes() -> None:
 
     # 4. Save the updated sizes to the database
     for folder_id, total_size in final_sizes.items():
-        await Folder.get_motor_collection().update_one(
+        await Folder.get_pymongo_collection().update_one(
             {"_id": folder_id},
             {"$set": {"size": total_size}}
         )
