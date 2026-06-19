@@ -1241,6 +1241,8 @@ export default function App() {
             <button 
               style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '4px' }}
               onClick={handleNavigateUp}
+              aria-label="Navigate up"
+              title="Navigate up"
             >
               <ArrowUp size={20} />
             </button>
@@ -1254,6 +1256,7 @@ export default function App() {
           <button 
             style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
             onClick={() => { triggerHaptic('light'); setIsSortOpen(true); }}
+            aria-label="Sort options"
             title="Sort options"
           >
             <ArrowUpDown size={18} />
@@ -1261,6 +1264,8 @@ export default function App() {
           <button 
             style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            aria-label={viewMode === 'grid' ? "Switch to list view" : "Switch to grid view"}
+            title={viewMode === 'grid' ? "List view" : "Grid view"}
           >
             {viewMode === 'grid' ? <List size={18} /> : <Grid size={18} />}
           </button>
@@ -1268,6 +1273,8 @@ export default function App() {
             <button 
               style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
               onClick={() => { triggerHaptic('light'); setIsAdminOpen(!isAdminOpen); if(!isAdminOpen) { loadAdminUsers(); loadAllFolders(); } }}
+              aria-label="Admin dashboard"
+              title="Admin dashboard"
             >
               <Shield size={18} />
             </button>
@@ -1306,11 +1313,17 @@ export default function App() {
             type="text" 
             placeholder="Search folders and files..."
             className="z-search-input"
+            aria-label="Search folders and files"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--hint-color)' }} onClick={() => setSearchQuery('')}>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--hint-color)' }}
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              title="Clear search"
+            >
               <X size={14} />
             </button>
           )}
@@ -1354,6 +1367,8 @@ export default function App() {
                   <button 
                     className="z-action-btn"
                     onClick={() => { triggerHaptic('light'); setActiveItem({ ...folder, type: 'folder' }); }}
+                    aria-label={`Options for folder ${folder.name}`}
+                    title="Folder options"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1384,12 +1399,16 @@ export default function App() {
                   <button 
                     className="z-action-btn play-btn"
                     onClick={() => handlePlayFile(file.id)}
+                    aria-label={`Play file ${file.name}`}
+                    title="Play file"
                   >
                     <Play size={14} fill="var(--success-color)" />
                   </button>
                   <button 
                     className="z-action-btn"
                     onClick={() => { triggerHaptic('light'); setActiveItem({ ...file, type: 'file' }); }}
+                    aria-label={`Options for file ${file.name}`}
+                    title="File options"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1416,6 +1435,8 @@ export default function App() {
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)' 
                 }} 
                 onClick={() => { triggerHaptic('light'); setClipboard(null); }}
+                aria-label="Cancel paste operation"
+                title="Cancel paste operation"
               >
                 <X size={18} />
               </button>
@@ -1438,12 +1459,20 @@ export default function App() {
                     executePaste(); 
                   }
                 }}
+                aria-label="Paste clipboard item"
+                title={isPasteDisabled ? "Cannot paste here" : "Paste clipboard item"}
+                aria-disabled={isPasteDisabled}
               >
                 <Clipboard size={22} />
               </button>
             </div>
           ) : (
-            <button className="z-fab" onClick={() => { triggerHaptic('medium'); setIsCreateFolderOpen(true); }}>
+            <button
+              className="z-fab"
+              onClick={() => { triggerHaptic('medium'); setIsCreateFolderOpen(true); }}
+              aria-label="Create new folder"
+              title="Create new folder"
+            >
               <Plus size={24} />
             </button>
           )}
@@ -1460,6 +1489,8 @@ export default function App() {
               <button 
                 style={{ background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', padding: '4px' }}
                 onClick={() => setIsSortOpen(false)}
+                aria-label="Close sort options"
+                title="Close"
               >
                 <X size={18} />
               </button>
