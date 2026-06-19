@@ -21,3 +21,7 @@
 **Vulnerability:** File names extracted from uploaded Telegram media (e.g., via `getattr(media, "file_name", None)`) could be arbitrarily long. When rendered in Markdown messages, they exceeded Pyrogram API limits (`MessageTooLong` error), causing a persistent Denial of Service (DoS) for handlers processing those files.
 **Learning:** External inputs, even seemingly benign ones like file names from Telegram media, must be treated as untrusted and can cause application crashes if their length is not constrained before storage and rendering.
 **Prevention:** Always truncate or limit the length of file names (e.g., to 128 characters) immediately after extraction and before writing to the database or passing to the Pyrogram client, while taking care to preserve the file extension if applicable.
+## 2025-02-28 - Mitigated Timing Attack in Cryptographic Signature Verification
+**Vulnerability:** The Telegram `initData` hash signature was being verified using a simple string inequality operator (`if calculated_hash != received_hash:`). This allowed for potential timing attacks because the comparison short-circuits upon encountering the first differing character, revealing information about the expected hash string.
+**Learning:** Even standard string equality checks are unsafe for cryptographic signatures. Timing attacks can be used to forge auth payloads.
+**Prevention:** Always use constant-time comparison methods, such as `hmac.compare_digest`, when verifying cryptographic signatures to prevent timing attacks.
