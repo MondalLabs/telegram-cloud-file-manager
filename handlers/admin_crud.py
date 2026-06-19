@@ -562,7 +562,7 @@ async def run_health_check_callback(client, query: CallbackQuery, user: User) ->
         except Exception as e:
             log.error("Error fetching messages in batch: %s", e)
             await query.edit_message_text(
-                f"❌ **Health Check Error**\n\nCould not query dump group. Internal error: `{e}`",
+                "❌ **Health Check Error**\n\nCould not query dump group due to an internal error.",
                 reply_markup=admin_dashboard_kb(),
                 parse_mode=ParseMode.MARKDOWN,
             )
