@@ -69,6 +69,17 @@ async def _init_db():
         document_models=[Folder, File, User, FSMState, BotSettings],
     )
     log.info("DB ready.")
+    
+    # Load live settings from MongoDB into config cache
+    log.info("Loading live settings configuration...")
+    db_settings = await BotSettings.get_global()
+    settings.update_cache(
+        protect_content=db_settings.protect_content,
+        items_per_page=db_settings.items_per_page,
+        bot_name=db_settings.bot_name,
+        auto_delete_hours=db_settings.auto_delete_hours,
+    )
+    
     log.info("Synchronizing folder sizes...")
     from services.folder_service import recalculate_all_folder_sizes
     await recalculate_all_folder_sizes()

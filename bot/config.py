@@ -68,5 +68,59 @@ class Settings(BaseSettings):
         return self.bot_name.strip() if self.bot_name and self.bot_name.strip() else None
 
 
+class LiveSettings:
+    """Wrapper class around the Pydantic Settings instance that supports in-memory overrides."""
+
+    def __init__(self, raw_settings: Settings):
+        self._raw_settings = raw_settings
+        self._cache = {}
+
+    def update_cache(
+        self,
+        protect_content: bool | None = None,
+        items_per_page: int | None = None,
+        bot_name: str | None = None,
+        auto_delete_hours: float | None = None,
+    ):
+        """Update settings override cache. Storing None resets to env defaults."""
+        self._cache["protect_content"] = protect_content
+        self._cache["items_per_page"] = items_per_page
+        self._cache["bot_name"] = bot_name
+        self._cache["auto_delete_hours"] = auto_delete_hours
+
+    def clear_cache(self):
+        """Clears all live settings overrides."""
+        self._cache.clear()
+
+    @property
+    def protect_content(self) -> bool:
+        val = self._cache.get("protect_content")
+        return val if val is not None else self._raw_settings.protect_content
+
+    @property
+    def items_per_page(self) -> int:
+        val = self._cache.get("items_per_page")
+        return val if val is not None else self._raw_settings.items_per_page
+
+    @property
+    def bot_name(self) -> str | None:
+        val = self._cache.get("bot_name")
+        return val if val is not None else self._raw_settings.bot_name
+
+    @property
+    def auto_delete_hours(self) -> float:
+        val = self._cache.get("auto_delete_hours")
+        return val if val is not None else self._raw_settings.auto_delete_hours
+
+    @property
+    def display_name(self) -> str | None:
+        name = self.bot_name
+        return name.strip() if name and name.strip() else None
+
+    def __getattr__(self, name):
+        """Delegate any other attribute queries to the underlying Settings singleton."""
+        return getattr(self._raw_settings, name)
+
+
 # ── Singleton instance — import this everywhere ───────────────────────────────
-settings = Settings()
+settings = LiveSettings(Settings())

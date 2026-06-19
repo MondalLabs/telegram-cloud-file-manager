@@ -110,6 +110,15 @@ export default function App() {
   const [selectedFolderForException, setSelectedFolderForException] = useState('');
   const [exceptionRuleType, setExceptionRuleType] = useState('allow'); // 'allow' | 'block'
 
+  // Admin Settings
+  const [settingsData, setSettingsData] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [botNameInput, setBotNameInput] = useState('');
+  const [itemsPerPageInput, setItemsPerPageInput] = useState(15);
+  const [autoDeleteHoursInput, setAutoDeleteHoursInput] = useState(1.0);
+  const [protectContentInput, setProtectContentInput] = useState(true);
+
   // Authentication states
   const [isReady, setIsReady] = useState(false);
   const [initData, setInitData] = useState('');
@@ -992,14 +1001,142 @@ export default function App() {
         body: JSON.stringify({ file_ids: fileIds })
       });
 
-      if (!res.ok) throw new Error("Failed to purge broken references.");
-      const data = await res.json();
       showToast(`Purged ${data.purged_count} broken reference(s)!`, "success");
       runHealthCheck();
     } catch (err) {
       showToast(err.message, 'error');
     }
   };
+
+  const loadSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      if (isMockMode) {
+        await new Promise(r => setTimeout(r, 400));
+        const mockData = {
+          settings: {
+            protect_content: true,
+            items_per_page: 15,
+            bot_name: "Cloud Bot (Mock)",
+            auto_delete_hours: 1.0
+          },
+          defaults: {
+            protect_content: true,
+            items_per_page: 15,
+            bot_name: "",
+            auto_delete_hours: 1.0
+          },
+          overrides: {
+            protect_content: false,
+            items_per_page: false,
+            bot_name: true,
+            auto_delete_hours: false
+          }
+        };
+        setSettingsData(mockData);
+        setBotNameInput(mockData.settings.bot_name || '');
+        setItemsPerPageInput(mockData.settings.items_per_page);
+        setAutoDeleteHoursInput(mockData.settings.auto_delete_hours);
+        setProtectContentInput(mockData.settings.protect_content);
+        return;
+      }
+
+      const headers = {};
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/settings`, { headers });
+      if (!res.ok) throw new Error("Failed to load settings.");
+      const data = await res.json();
+      setSettingsData(data);
+      setBotNameInput(data.settings.bot_name || '');
+      setItemsPerPageInput(data.settings.items_per_page);
+      setAutoDeleteHoursInput(data.settings.auto_delete_hours);
+      setProtectContentInput(data.settings.protect_content);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (fieldToSave = null, valueToSave = null) => {
+    triggerHaptic('medium');
+    setSettingsSaving(true);
+    try {
+      let body = {};
+      if (fieldToSave) {
+        body[fieldToSave] = valueToSave;
+      } else {
+        const itemsVal = parseInt(itemsPerPageInput, 10);
+        if (isNaN(itemsVal) || itemsVal < 1 || itemsVal > 100) {
+          throw new Error("Items per page must be a number between 1 and 100");
+        }
+        const hoursVal = parseFloat(autoDeleteHoursInput);
+        if (isNaN(hoursVal) || hoursVal < 0 || hoursVal > 720) {
+          throw new Error("Auto delete hours must be a number between 0 and 720");
+        }
+        
+        body = {
+          bot_name: botNameInput.trim() || null,
+          items_per_page: itemsVal,
+          auto_delete_hours: hoursVal,
+          protect_content: protectContentInput
+        };
+      }
+
+      if (isMockMode) {
+        await new Promise(r => setTimeout(r, 400));
+        setSettingsData(prev => {
+          if (!prev) return null;
+          const newSettings = { ...prev.settings, ...body };
+          const newOverrides = { ...prev.overrides };
+          Object.keys(body).forEach(k => {
+            newOverrides[k] = body[k] !== null;
+          });
+          return {
+            ...prev,
+            settings: newSettings,
+            overrides: newOverrides
+          };
+        });
+        showToast("Settings saved successfully (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/settings`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to update settings.");
+      }
+      
+      const data = await res.json();
+      setSettingsData(data);
+      setBotNameInput(data.settings.bot_name || '');
+      setItemsPerPageInput(data.settings.items_per_page);
+      setAutoDeleteHoursInput(data.settings.auto_delete_hours);
+      setProtectContentInput(data.settings.protect_content);
+      
+      showToast("Settings saved successfully!", "success");
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminOpen && adminTab === 'settings') {
+      loadSettings();
+    }
+  }, [isAdminOpen, adminTab]);
 
   const formatBytes = (bytes, decimals = 2) => {
     if (!bytes) return '0 Bytes';
@@ -1609,6 +1746,22 @@ export default function App() {
               >
                 Audit
               </button>
+              <button 
+                style={{ 
+                  flex: 1, 
+                  background: 'none', 
+                  border: 'none', 
+                  color: adminTab === 'settings' ? 'var(--accent-color)' : 'var(--hint-color)', 
+                  borderBottom: adminTab === 'settings' ? '2px solid var(--accent-color)' : 'none',
+                  padding: '10px 0', 
+                  fontSize: '0.8rem', 
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }} 
+                onClick={() => setAdminTab('settings')}
+              >
+                Settings
+              </button>
             </div>
 
             {/* TAB CONTENT: Access & Exceptions */}
@@ -1968,6 +2121,173 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            )}
+
+            {adminTab === 'settings' && (
+              <div>
+                {settingsLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', gap: '8px' }}>
+                    <RefreshCw className="animate-spin" size={20} style={{ color: 'var(--accent-color)' }} />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Loading settings...</span>
+                  </div>
+                ) : settingsData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Bot Name Setting Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Bot Name / Personalization</span>
+                        {settingsData.overrides.bot_name && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('bot_name', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder={settingsData.defaults.bot_name || "Telegram Cloud Manager"}
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={botNameInput}
+                        onChange={(e) => setBotNameInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.bot_name || "None (uses generic names)"}</code>. Changing this updates welcome messages.
+                      </span>
+                    </div>
+
+                    {/* Items Per Page Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Items Per Page</span>
+                        {settingsData.overrides.items_per_page && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('items_per_page', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="number" 
+                        min="1"
+                        max="100"
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={itemsPerPageInput}
+                        onChange={(e) => setItemsPerPageInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.items_per_page}</code>. Virtual folders will page at this limit.
+                      </span>
+                    </div>
+
+                    {/* Auto Delete Hours Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Auto Delete Delay (Hours)</span>
+                        {settingsData.overrides.auto_delete_hours && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('auto_delete_hours', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="number" 
+                        min="0"
+                        max="720"
+                        step="0.1"
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={autoDeleteHoursInput}
+                        onChange={(e) => setAutoDeleteHoursInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.auto_delete_hours} hours</code>. Use <code>0</code> to disable auto-delete.
+                      </span>
+                    </div>
+
+                    {/* Protect Content Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Content Protection (Anti-Forward/Save)</span>
+                        {settingsData.overrides.protect_content && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('protect_content', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={protectContentInput}
+                          onChange={(e) => setProtectContentInput(e.target.checked)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <span>Protect delivered Telegram messages from save/forward</span>
+                      </label>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.protect_content ? "Enabled" : "Disabled"}</code>. Disallows forwarding or saving media.
+                      </span>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                      <button 
+                        className="z-btn z-btn-text" 
+                        style={{ padding: '8px 16px', fontSize: '0.75rem' }} 
+                        onClick={loadSettings}
+                        disabled={settingsSaving}
+                      >
+                        Reset Form
+                      </button>
+                      <button 
+                        className="z-btn z-btn-primary" 
+                        style={{ padding: '8px 20px', fontSize: '0.75rem' }} 
+                        onClick={() => handleSaveSettings(null, null)}
+                        disabled={settingsSaving}
+                      >
+                        {settingsSaving ? "Saving..." : "Save Settings"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Failed to load settings.</span>
                 )}
               </div>
             )}

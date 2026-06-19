@@ -18,6 +18,10 @@ from pymongo import IndexModel, ASCENDING
 class BotSettings(Document):
     key: str = "global"                    # Always "global" — singleton row
     dump_chat_id: Optional[int] = None     # Set via /setup, overrides env var
+    protect_content: Optional[bool] = None  # Live override for protect_content
+    items_per_page: Optional[int] = None   # Live override for items_per_page
+    bot_name: Optional[str] = None         # Live override for bot_name
+    auto_delete_hours: Optional[float] = None # Live override for auto_delete_hours
 
     class Settings:
         name = "bot_settings"

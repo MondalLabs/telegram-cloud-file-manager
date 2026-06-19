@@ -77,6 +77,12 @@ class UserApproveRequest(BaseModel):
 class PurgeBrokenRequest(BaseModel):
     file_ids: List[str]
 
+class SettingsUpdateRequest(BaseModel):
+    protect_content: Optional[bool] = None
+    items_per_page: Optional[int] = None
+    bot_name: Optional[str] = None
+    auto_delete_hours: Optional[float] = None
+
 # ── Dependency Injection Gating ────────────────────────────────────────────────
 
 async def get_current_user(x_telegram_init_data: str = Header(..., alias="X-Telegram-Init-Data")) -> User:
@@ -625,3 +631,90 @@ async def api_purge_broken(req: PurgeBrokenRequest, user: User = Depends(get_adm
             if success:
                 count += 1
     return {"status": "ok", "purged_count": count}
+
+
+def get_settings_response(db_settings: BotSettings) -> dict:
+    return {
+        "settings": {
+            "protect_content": settings.protect_content,
+            "items_per_page": settings.items_per_page,
+            "bot_name": settings.bot_name,
+            "auto_delete_hours": settings.auto_delete_hours
+        },
+        "defaults": {
+            "protect_content": settings._raw_settings.protect_content,
+            "items_per_page": settings._raw_settings.items_per_page,
+            "bot_name": settings._raw_settings.bot_name,
+            "auto_delete_hours": settings._raw_settings.auto_delete_hours
+        },
+        "overrides": {
+            "protect_content": db_settings.protect_content is not None,
+            "items_per_page": db_settings.items_per_page is not None,
+            "bot_name": db_settings.bot_name is not None,
+            "auto_delete_hours": db_settings.auto_delete_hours is not None
+        }
+    }
+
+@router.get("/admin/settings")
+async def api_get_admin_settings(user: User = Depends(get_admin_user)) -> dict:
+    """Returns dynamic application settings configuration (Admin only)."""
+    db_settings = await BotSettings.get_global()
+    return get_settings_response(db_settings)
+
+@router.post("/admin/settings")
+async def api_update_admin_settings(req: SettingsUpdateRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Updates dynamic application settings configuration (Admin only)."""
+    db_settings = await BotSettings.get_global()
+    update_data = req.model_dump(exclude_unset=True)
+
+    if "protect_content" in update_data:
+        db_settings.protect_content = update_data["protect_content"]
+
+    if "items_per_page" in update_data:
+        v = update_data["items_per_page"]
+        if v is not None and (v < 1 or v > 100):
+            raise HTTPException(status_code=400, detail="Items per page must be between 1 and 100")
+        db_settings.items_per_page = v
+
+    if "bot_name" in update_data:
+        v = update_data["bot_name"]
+        if v is not None:
+            v_stripped = v.strip()
+            if len(v_stripped) > 64:
+                raise HTTPException(status_code=400, detail="Bot name must be 64 characters or less")
+            db_settings.bot_name = v_stripped if v_stripped else None
+        else:
+            db_settings.bot_name = None
+
+    if "auto_delete_hours" in update_data:
+        v = update_data["auto_delete_hours"]
+        if v is not None and (v < 0 or v > 720):
+            raise HTTPException(status_code=400, detail="Auto delete hours must be between 0 and 720")
+        db_settings.auto_delete_hours = v
+
+    await db_settings.save()
+
+    # Update dynamic settings in-memory cache
+    settings.update_cache(
+        protect_content=db_settings.protect_content,
+        items_per_page=db_settings.items_per_page,
+        bot_name=db_settings.bot_name,
+        auto_delete_hours=db_settings.auto_delete_hours
+    )
+
+    # Dynamic reload of Telegram commands if bot is connected
+    if tg_bot.is_connected:
+        try:
+            from pyrogram.types import BotCommand
+            display_name = settings.display_name
+            _start_desc = f"📁 Open {display_name}" if display_name else "📁 Open the File Manager"
+            await tg_bot.set_bot_commands([
+                BotCommand("start",  _start_desc),
+                BotCommand("done",   "✅ Finish current upload session"),
+                BotCommand("cancel", "❌ Cancel current operation"),
+            ])
+            log.info("Telegram commands refreshed to display name: %s", display_name)
+        except Exception as e:
+            log.error("Failed to dynamically refresh bot commands: %s", e)
+
+    return get_settings_response(db_settings)
