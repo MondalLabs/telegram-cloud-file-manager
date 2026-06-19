@@ -402,7 +402,7 @@ async def api_play_file(req: FilePlayRequest, user: User = Depends(get_current_u
 
     except Exception as e:
         log.error("API playback delivery error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Playback delivery failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Playback delivery failed due to an internal error.")
 
 # ── Admin Exceptions Management Endpoints ─────────────────────────────────────
 
@@ -566,7 +566,7 @@ async def api_run_health_check(user: User = Depends(get_admin_user)) -> dict:
                 tg_msgs = [tg_msgs]
         except Exception as e:
             log.error("API health check MTProto batch fetch error: %s", e)
-            raise HTTPException(status_code=500, detail=f"Failed to query Telegram storage: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to query Telegram storage due to an internal error.")
 
         for idx, f in enumerate(batch):
             tg_msg = tg_msgs[idx] if idx < len(tg_msgs) else None
