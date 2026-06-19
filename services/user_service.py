@@ -14,7 +14,7 @@ to OWNER on first contact.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from models.user import User, UserRole
@@ -74,13 +74,13 @@ async def approve_user(telegram_id: int, approved_by: int) -> Optional[User]:
     if user.role == UserRole.OWNER:
         raise ValueError("Cannot change the role of the bot owner.")
     user.role = UserRole.APPROVED
-    user.approved_at = datetime.utcnow()
+    user.approved_at = datetime.now(timezone.utc)
     user.approved_by = approved_by
     user.revoked_at = None
     await user.save()
     return user
-
-
+    
+    
 async def revoke_user(telegram_id: int) -> Optional[User]:
     """Downgrade a user back to GUEST. Returns None if user not found."""
     user = await User.find_one(User.telegram_id == telegram_id)
@@ -89,7 +89,7 @@ async def revoke_user(telegram_id: int) -> Optional[User]:
     if user.role == UserRole.OWNER:
         raise ValueError("Cannot revoke the bot owner's access.")
     user.role = UserRole.GUEST
-    user.revoked_at = datetime.utcnow()
+    user.revoked_at = datetime.now(timezone.utc)
     await user.save()
     return user
 
