@@ -143,6 +143,13 @@ async def has_file_access(user: User, folder_id: Optional[PydanticObjectId]) -> 
     if user.role == UserRole.OWNER:
         return True
 
+    # ⚡ Bolt Optimization: Early return skips expensive O(Depth) DB queries
+    # when the user has no specific folder rules configured (which is the default).
+    # This prevents an N+1 query explosion during directory listing where this
+    # function is called concurrently for every child item.
+    if not user.blocked_folders and not user.allowed_folders:
+        return True
+
     # Build ancestor path (including folder_id itself)
     import services.folder_service as folder_service
     path_ids = []
