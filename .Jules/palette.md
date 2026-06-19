@@ -14,3 +14,6 @@
 ## 2026-06-03 - Interactive Toast Labels for Informational Buttons
 **Learning:** Users can misclick on 'dead' informational buttons (like disabled arrows or page indicators) which fails silently, causing confusion.
 **Action:** Use the `query.answer()` toast capability to provide helpful, temporary feedback (e.g., '🚫 No more pages' or '📄 Page X of Y') on informational buttons, turning dead elements into interactive micro-interactions.
+## 2024-05-23 - Separating Actions from Navigation
+**Learning:** Combining action buttons (like "New Folder", "Upload") with structural navigation buttons (like "Back" or "Home") on the same row creates crowded 3-button layouts. On mobile, this forces text truncation, increases the cognitive load of scanning, and leads to misclicks. Additionally, providing a "Home" button at the root directory for an Admin is a "navigation trap" if it doesn't lead back to their Dashboard.
+**Action:** Always maintain a clear visual hierarchy by placing context actions on their own row, separate from structural navigation. At root levels, ensure the "Home/Back" equivalent returns the user to their respective entry point (e.g. Dashboard for Admins, Refresh for standard users) rather than acting as a dead button.
