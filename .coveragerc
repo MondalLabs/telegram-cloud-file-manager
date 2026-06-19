@@ -1,0 +1,16 @@
+[run]
+branch = True
+source =
+    bot/api.py
+    models/
+    services/
+    utils/
+omit =
+    bot/__init__.py
+    bot/__main__.py
+    bot/client.py
+    bot/config.py
+    handlers/*
+    keyboards/*
+    middlewares/*
+    tests/*
