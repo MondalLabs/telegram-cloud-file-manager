@@ -141,7 +141,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
         return
 
     # Check permission exception
-    if not await user_service.has_folder_access(user, file_doc.folder_id):
+    if not await user_service.has_file_access(user, file_doc.folder_id):
         await query.answer("🔒 Access Denied: Restricted folder.", show_alert=True)
         return
 

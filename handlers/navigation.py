@@ -111,9 +111,8 @@ async def render_folder(
             allowed_folders.append(f)
 
     allowed_files = []
-    # Since files are inside this parent folder, if parent folder is accessible, all files inside are.
-    # Root files (parent_id_obj is None) are always accessible since root has_folder_access is True.
-    allowed_files = all_files
+    if await user_service.has_file_access(user, parent_id_obj):
+        allowed_files = all_files
 
     folder_count = len(allowed_folders)
     file_count = len(allowed_files)

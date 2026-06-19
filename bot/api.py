@@ -160,19 +160,21 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
                 "created_by": f.created_by
             })
 
-    # Files are accessible if parent directory is open
-    allowed_files = [{
-        "id": str(f.id),
-        "name": f.name,
-        "file_type": f.file_type,
-        "file_size": f.file_size,
-        "duration": f.duration,
-        "width": f.width,
-        "height": f.height,
-        "mime_type": f.mime_type,
-        "uploaded_at": f.uploaded_at.isoformat(),
-        "icon": f.icon
-    } for f in all_files]
+    # Files are accessible if user has file access to the parent folder
+    allowed_files = []
+    if await user_service.has_file_access(user, parent_id_obj):
+        allowed_files = [{
+            "id": str(f.id),
+            "name": f.name,
+            "file_type": f.file_type,
+            "file_size": f.file_size,
+            "duration": f.duration,
+            "width": f.width,
+            "height": f.height,
+            "mime_type": f.mime_type,
+            "uploaded_at": f.uploaded_at.isoformat(),
+            "icon": f.icon
+        } for f in all_files]
 
     return {
         "folder_id": folder_id or "root",
@@ -190,7 +192,7 @@ async def api_get_folder_size(folder_id: str, user: User = Depends(get_current_u
     
     # Check permission
     folder_id_obj = PydanticObjectId(folder_id)
-    if not await user_service.has_folder_access(user, folder_id_obj):
+    if not await user_service.has_file_access(user, folder_id_obj):
         raise HTTPException(status_code=403, detail="Access Denied: Restricted folder")
 
     stats = await folder_service.get_folder_size(folder_id_obj)
@@ -353,7 +355,7 @@ async def api_play_file(req: FilePlayRequest, user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="File not found")
 
     # Check permission exceptions
-    if not await user_service.has_folder_access(user, f.folder_id):
+    if not await user_service.has_file_access(user, f.folder_id):
         raise HTTPException(status_code=403, detail="Access Denied: Restricted folder")
 
     # Fetch caption formatting and trigger MTProto client send
