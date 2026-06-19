@@ -100,15 +100,19 @@ async def render_folder(
                 await update.reply("🔒 Access Denied: Restricted folder.")
             return
 
-    # Fetch all folders and files for filtering
-    all_folders = await folder_service.get_children(parent_id_obj)
-    all_files = await file_service.get_files_in_folder(parent_id_obj)
+    # Fetch all folders and files for filtering concurrently
+    all_folders, all_files = await asyncio.gather(
+        folder_service.get_children(parent_id_obj),
+        file_service.get_files_in_folder(parent_id_obj)
+    )
 
-    # Filter by user permissions
-    allowed_folders = []
-    for f in all_folders:
-        if await user_service.has_folder_access(user, f.id):
-            allowed_folders.append(f)
+    # Filter by user permissions concurrently
+    folder_access_results = await asyncio.gather(
+        *(user_service.has_folder_access(user, f.id) for f in all_folders)
+    )
+    allowed_folders = [
+        f for f, has_access in zip(all_folders, folder_access_results) if has_access
+    ]
 
     allowed_files = []
     if await user_service.has_file_access(user, parent_id_obj):
