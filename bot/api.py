@@ -156,6 +156,7 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
             allowed_folders.append({
                 "id": str(f.id),
                 "name": f.name,
+                "size": getattr(f, "size", 0),
                 "created_at": f.created_at.isoformat(),
                 "created_by": f.created_by
             })

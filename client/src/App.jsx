@@ -203,11 +203,11 @@ export default function App() {
         if (folderId === 'root') {
           setFolderName('Root');
           setBreadcrumbs([]);
-          setFolders([
-            { id: 'f1', name: '🎥 Movies & Shows', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f2', name: '📚 Textbooks & E-books', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f3', name: '🎵 Audio & Music Album', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f4', name: '🛡️ Restricted Documents (Admin)', created_at: new Date().toISOString(), created_by: 123456789 }
+           setFolders([
+            { id: 'f1', name: '🎥 Movies & Shows', created_at: new Date().toISOString(), created_by: 123456789, size: 2140000000 },
+            { id: 'f2', name: '📚 Textbooks & E-books', created_at: new Date().toISOString(), created_by: 123456789, size: 4560000 },
+            { id: 'f3', name: '🎵 Audio & Music Album', created_at: new Date().toISOString(), created_by: 123456789, size: 0 },
+            { id: 'f4', name: '🛡️ Restricted Documents (Admin)', created_at: new Date().toISOString(), created_by: 123456789, size: 0 }
           ]);
           setFiles([
             { id: 'doc1', name: 'Setup_Deployment_Guide.pdf', file_type: 'document', file_size: 4560000, uploaded_at: new Date().toISOString(), mime_type: 'application/pdf' },
@@ -217,7 +217,7 @@ export default function App() {
           setFolderName('Movies & Shows');
           setBreadcrumbs([{ id: 'f1', name: '🎥 Movies & Shows' }]);
           setFolders([
-            { id: 'f1_sub1', name: 'Marvel Cinematic Universe', created_at: new Date().toISOString() }
+            { id: 'f1_sub1', name: 'Marvel Cinematic Universe', created_at: new Date().toISOString(), size: 154000000 }
           ]);
           setFiles([
             { id: 'vid2', name: 'IronMan_4K_Trailer.mp4', file_type: 'video', file_size: 154000000, uploaded_at: new Date().toISOString() }
@@ -296,10 +296,11 @@ export default function App() {
       let comparison = 0;
       if (sortBy === 'name') {
         comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === 'size') {
+        comparison = (a.size || 0) - (b.size || 0);
       } else if (sortBy === 'date') {
         comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
       } else {
-        // Fallback to name comparison for folders
         comparison = a.name.localeCompare(b.name);
       }
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -1207,7 +1208,7 @@ export default function App() {
                   <div className="z-item-meta">
                     <span className="z-item-name">{folder.name}</span>
                     <span className="z-item-desc">
-                      Folder &bull; {new Date(folder.created_at).toLocaleDateString()}
+                      {formatBytes(folder.size || 0)} &bull; {new Date(folder.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>

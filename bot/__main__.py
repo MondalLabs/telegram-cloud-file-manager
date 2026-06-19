@@ -69,6 +69,10 @@ async def _init_db():
         document_models=[Folder, File, User, FSMState, BotSettings],
     )
     log.info("DB ready.")
+    log.info("Synchronizing folder sizes...")
+    from services.folder_service import recalculate_all_folder_sizes
+    await recalculate_all_folder_sizes()
+    log.info("Folder sizes synchronized.")
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────

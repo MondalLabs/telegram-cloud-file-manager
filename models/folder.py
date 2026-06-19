@@ -23,6 +23,7 @@ from pymongo import IndexModel, ASCENDING
 class Folder(Document):
     name: str
     parent_id: Optional[PydanticObjectId] = None  # None = root-level
+    size: int = 0  # Total size of all files in this folder and its subfolders recursively
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: int  # Telegram user ID of the admin who created this folder
 
