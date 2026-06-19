@@ -120,31 +120,38 @@ def build_folder_keyboard(
 
         rows.append(nav_row)
 
-    # ── Footer row ────────────────────────────────────────────────────────────
-    footer: list[InlineKeyboardButton] = []
+    # ── Footer rows ───────────────────────────────────────────────────────────
+    if is_admin:
+        rows.append([
+            InlineKeyboardButton(
+                text="➕ New Folder",
+                callback_data=encode(ACTION_CF, current_id),
+            ),
+            InlineKeyboardButton(
+                text="📤 Upload",
+                callback_data=encode(ACTION_UPL, current_id),
+            ),
+        ])
 
+    nav_row: list[InlineKeyboardButton] = []
     if back_id:
-        footer.append(InlineKeyboardButton(
+        nav_row.append(InlineKeyboardButton(
             text="⬆️ Back",
             callback_data=encode(ACTION_BACK, back_id),
         ))
     else:
-        footer.append(InlineKeyboardButton(
-            text="🏠 Home",
-            callback_data="home",
-        ))
+        if is_admin:
+            nav_row.append(InlineKeyboardButton(
+                text="🛠️ Dashboard",
+                callback_data="dashboard",
+            ))
+        else:
+            nav_row.append(InlineKeyboardButton(
+                text="🔄 Refresh",
+                callback_data="home",
+            ))
 
-    if is_admin:
-        footer.append(InlineKeyboardButton(
-            text="➕ New Folder",
-            callback_data=encode(ACTION_CF, current_id),
-        ))
-        footer.append(InlineKeyboardButton(
-            text="📤 Upload",
-            callback_data=encode(ACTION_UPL, current_id),
-        ))
-
-    rows.append(footer)
+    rows.append(nav_row)
 
     return InlineKeyboardMarkup(rows)
 
@@ -155,27 +162,38 @@ def build_empty_folder_keyboard(
     is_admin: bool,
 ) -> InlineKeyboardMarkup:
     """Keyboard shown when a folder is empty."""
-    footer: list[InlineKeyboardButton] = []
+    rows: list[list[InlineKeyboardButton]] = []
 
+    if is_admin:
+        rows.append([
+            InlineKeyboardButton(
+                text="➕ New Folder",
+                callback_data=encode(ACTION_CF, current_id),
+            ),
+            InlineKeyboardButton(
+                text="📤 Upload",
+                callback_data=encode(ACTION_UPL, current_id),
+            ),
+        ])
+
+    nav_row: list[InlineKeyboardButton] = []
     if back_id:
-        footer.append(InlineKeyboardButton(
+        nav_row.append(InlineKeyboardButton(
             text="⬆️ Back",
             callback_data=encode(ACTION_BACK, back_id),
         ))
     else:
-        footer.append(InlineKeyboardButton(
-            text="🏠 Home",
-            callback_data="home",
-        ))
+        if is_admin:
+            nav_row.append(InlineKeyboardButton(
+                text="🛠️ Dashboard",
+                callback_data="dashboard",
+            ))
+        else:
+            nav_row.append(InlineKeyboardButton(
+                text="🔄 Refresh",
+                callback_data="home",
+            ))
 
-    if is_admin:
-        footer.append(InlineKeyboardButton(
-            text="➕ New Folder",
-            callback_data=encode(ACTION_CF, current_id),
-        ))
-        footer.append(InlineKeyboardButton(
-            text="📤 Upload",
-            callback_data=encode(ACTION_UPL, current_id),
-        ))
+    rows.append(nav_row)
 
-    return InlineKeyboardMarkup([footer] if footer else [[]])
+    return InlineKeyboardMarkup(rows)
