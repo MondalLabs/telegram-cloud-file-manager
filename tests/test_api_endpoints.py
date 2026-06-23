@@ -68,7 +68,8 @@ def test_api_get_user_me():
 @patch("services.user_service.has_file_access")
 @patch("services.folder_service.get_children")
 @patch("services.file_service.get_files_in_folder")
-def test_api_get_folders_root(mock_get_files, mock_get_children, mock_has_file, mock_has_folder):
+@patch("services.folder_service.get_immediate_item_counts", new_callable=AsyncMock)
+def test_api_get_folders_root(mock_get_counts, mock_get_files, mock_get_children, mock_has_file, mock_has_folder):
     mock_has_folder.return_value = True
     mock_has_file.return_value = True
     
@@ -79,6 +80,9 @@ def test_api_get_folders_root(mock_get_files, mock_get_children, mock_has_file, 
     fld.created_at.isoformat.return_value = "2026-06-19T00:00:00"
     fld.created_by = 999
     mock_get_children.return_value = [fld]
+    
+    # Mock item count return
+    mock_get_counts.return_value = {fld.id: 5}
     
     # Mock file child
     fl = MagicMock()
@@ -100,8 +104,10 @@ def test_api_get_folders_root(mock_get_files, mock_get_children, mock_has_file, 
     assert data["folder_name"] == "Root"
     assert len(data["folders"]) == 1
     assert data["folders"][0]["name"] == "Movies"
+    assert data["folders"][0]["item_count"] == 5
     assert len(data["files"]) == 1
     assert data["files"][0]["name"] == "video.mp4"
+    mock_get_counts.assert_called_once()
 
 @patch("services.user_service.has_folder_access")
 @patch("services.folder_service.get_folder")

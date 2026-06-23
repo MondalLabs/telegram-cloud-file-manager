@@ -413,3 +413,40 @@ async def recalculate_all_folder_sizes() -> None:
             {"_id": folder_id},
             {"$set": {"size": total_size}}
         )
+
+
+async def get_immediate_item_counts(folder_ids: list[PydanticObjectId]) -> dict[PydanticObjectId, int]:
+    """
+    Returns a mapping of folder_id -> count of immediate children (folders + files).
+    Efficiently queries using bulk aggregations to avoid N+1 query loops.
+    """
+    if not folder_ids:
+        return {}
+
+    # Cast to raw ObjectId to ensure proper matching in aggregation pipeline (Safeguard #5)
+    raw_ids = [ObjectId(fid) for fid in folder_ids]
+    counts = {fid: 0 for fid in folder_ids}
+
+    # 1. Aggregate subfolders count per parent_id
+    folder_pipeline = [
+        {"$match": {"parent_id": {"$in": raw_ids}}},
+        {"$group": {"_id": "$parent_id", "count": {"$sum": 1}}}
+    ]
+    folder_results = await Folder.aggregate(folder_pipeline).to_list()
+    for res in folder_results:
+        pid = PydanticObjectId(res["_id"])
+        if pid in counts:
+            counts[pid] += res["count"]
+
+    # 2. Aggregate files count per folder_id
+    file_pipeline = [
+        {"$match": {"folder_id": {"$in": raw_ids}}},
+        {"$group": {"_id": "$folder_id", "count": {"$sum": 1}}}
+    ]
+    file_results = await File.aggregate(file_pipeline).to_list()
+    for res in file_results:
+        fid = PydanticObjectId(res["_id"])
+        if fid in counts:
+            counts[fid] += res["count"]
+
+    return counts

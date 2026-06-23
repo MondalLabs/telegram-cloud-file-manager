@@ -156,6 +156,10 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
     all_folders = await folder_service.get_children(parent_id_obj)
     all_files = await file_service.get_files_in_folder(parent_id_obj)
 
+    # Bulk query immediate item counts (Approach 1)
+    folder_ids = [f.id for f in all_folders]
+    item_counts = await folder_service.get_immediate_item_counts(folder_ids)
+
     # Filter folders by exceptions
     allowed_folders = []
     for f in all_folders:
@@ -164,6 +168,7 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
                 "id": str(f.id),
                 "name": f.name,
                 "size": getattr(f, "size", 0),
+                "item_count": item_counts.get(f.id, 0),
                 "created_at": f.created_at.isoformat(),
                 "created_by": f.created_by
             })

@@ -1358,7 +1358,7 @@ export default function App() {
                   <div className="z-item-meta">
                     <span className="z-item-name">{folder.name}</span>
                     <span className="z-item-desc">
-                      {formatBytes(folder.size || 0)} &bull; {new Date(folder.created_at).toLocaleDateString()}
+                      {folder.item_count !== undefined ? `${folder.item_count} item${folder.item_count !== 1 ? 's' : ''} \u2022 ` : ''}{formatBytes(folder.size || 0)} &bull; {new Date(folder.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>
