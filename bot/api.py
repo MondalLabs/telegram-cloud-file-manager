@@ -17,6 +17,7 @@ import services.user_service as user_service
 import services.folder_service as folder_service
 import services.file_service as file_service
 import handlers.playback as playback
+from services.auto_delete_service import schedule_auto_delete
 
 log = logging.getLogger(__name__)
 
@@ -395,8 +396,7 @@ async def api_play_file(req: FilePlayRequest, user: User = Depends(get_current_u
 
         # Trigger auto-delete scheduler if enabled
         if settings.auto_delete_hours > 0:
-            delay = int(settings.auto_delete_hours * 3600)
-            asyncio.create_task(playback._auto_delete_msg(tg_bot, chat_id, sent.id, delay))
+            await schedule_auto_delete(tg_bot, chat_id, sent.id, settings.auto_delete_hours)
 
         return {"status": "ok", "delivered_to": chat_id}
 

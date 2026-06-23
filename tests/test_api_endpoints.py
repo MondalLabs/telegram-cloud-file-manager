@@ -245,11 +245,12 @@ def test_api_delete_file(mock_delete):
 
 # ── 11. POST /api/files/play ──────────────────────────────────────────────────
 
+@patch("bot.api.schedule_auto_delete", new_callable=AsyncMock)
 @patch("services.user_service.has_file_access")
 @patch("services.file_service.get_file")
 @patch("handlers.playback._build_caption")
 @patch("bot.api.tg_bot.send_video", new_callable=AsyncMock)
-def test_api_play_file(mock_send_video, mock_caption, mock_get_file, mock_has_file):
+def test_api_play_file(mock_send_video, mock_caption, mock_get_file, mock_has_file, mock_schedule_delete):
     mock_has_file.return_value = True
     
     fl = MagicMock()
@@ -266,6 +267,7 @@ def test_api_play_file(mock_send_video, mock_caption, mock_get_file, mock_has_fi
     response = client.post("/api/files/play", json={"file_id": str(fid)})
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    mock_schedule_delete.assert_called_once()
 
 # ── 12. POST /api/files/move ──────────────────────────────────────────────────
 
@@ -777,7 +779,8 @@ def test_api_delete_folder_exception(mock_delete_tree):
 @patch("bot.api.tg_bot.send_photo", new_callable=AsyncMock)
 @patch("bot.api.tg_bot.send_document", new_callable=AsyncMock)
 @patch("bot.api.settings")
-def test_api_play_file_types(mock_settings, mock_send_doc, mock_send_photo, mock_caption, mock_get_file, mock_has_file):
+@patch("bot.api.schedule_auto_delete", new_callable=AsyncMock)
+def test_api_play_file_types(mock_schedule_delete, mock_settings, mock_send_doc, mock_send_photo, mock_caption, mock_get_file, mock_has_file):
     global active_user
     active_user = mock_approved
     mock_has_file.return_value = True

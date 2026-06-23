@@ -33,6 +33,8 @@ from models.file import File
 from models.user import User
 from models.state import FSMState
 from models.settings import BotSettings
+from models.auto_delete import AutoDeleteJob
+
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 import handlers.setup
@@ -66,7 +68,7 @@ async def _init_db():
     mongo_client = AsyncMongoClient(settings.mongo_uri)
     await init_beanie(
         database=mongo_client[settings.db_name],
-        document_models=[Folder, File, User, FSMState, BotSettings],
+        document_models=[Folder, File, User, FSMState, BotSettings, AutoDeleteJob],
     )
     log.info("DB ready.")
     
@@ -107,6 +109,10 @@ async def _run():
     # Step 3: Start the bot (one connection, same event loop as DB)
     await bot.start()
     log.info("Starting bot...")
+
+    # Step 3.5: Hydrate pending auto-deletions from DB
+    from services.auto_delete_service import hydrate_auto_deletions
+    asyncio.create_task(hydrate_auto_deletions(bot))
 
     # Step 4: Register bot commands now that the client is connected
     from pyrogram.types import BotCommand

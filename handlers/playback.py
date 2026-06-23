@@ -32,6 +32,7 @@ import services.file_service as file_service
 import services.folder_service as folder_service
 import services.user_service as user_service
 from utils.callback_data import decode
+from services.auto_delete_service import schedule_auto_delete
 
 log = logging.getLogger(__name__)
 
@@ -47,13 +48,6 @@ def _delete_label() -> str:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-async def _auto_delete_msg(client, chat_id: int, msg_id: int, delay: int) -> None:
-    """Fire-and-forget: delete a message after `delay` seconds."""
-    await asyncio.sleep(delay)
-    try:
-        await client.delete_messages(chat_id, msg_id)
-    except Exception:
-        pass  # Already deleted or too old
 
 class _SendAdapter:
     """Lets render_folder send a NEW message instead of editing an existing one."""
@@ -184,8 +178,7 @@ async def play_video(client, query: CallbackQuery, user: User) -> None:
 
         # ── Auto-delete the file after configured hours (0 = disabled) ─────────
         if cfg.auto_delete_hours > 0:
-            delay = int(cfg.auto_delete_hours * 3600)
-            asyncio.create_task(_auto_delete_msg(client, chat_id, sent.id, delay))
+            await schedule_auto_delete(client, chat_id, sent.id, cfg.auto_delete_hours)
 
         # ── Bring nav menu back to the bottom ───────────────────────────────
         # Delete the old nav message (it's now above the file), then re-send

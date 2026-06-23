@@ -6,5 +6,6 @@ from models.file import File
 from models.user import User, UserRole
 from models.state import FSMState
 from models.settings import BotSettings
+from models.auto_delete import AutoDeleteJob
 
-__all__ = ["Folder", "File", "User", "UserRole", "FSMState", "BotSettings"]
+__all__ = ["Folder", "File", "User", "UserRole", "FSMState", "BotSettings", "AutoDeleteJob"]
