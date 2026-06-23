@@ -14,3 +14,6 @@
 ## 2026-06-03 - Interactive Toast Labels for Informational Buttons
 **Learning:** Users can misclick on 'dead' informational buttons (like disabled arrows or page indicators) which fails silently, causing confusion.
 **Action:** Use the `query.answer()` toast capability to provide helpful, temporary feedback (e.g., '🚫 No more pages' or '📄 Page X of Y') on informational buttons, turning dead elements into interactive micro-interactions.
+## 2024-06-18 - Personalized Empty States in React
+**Learning:** Empty states in the frontend (e.g. `client/src/App.jsx`) were rendering generic text ("This folder is empty"), which felt impersonal compared to the Telegram bot interface which used `display_name`.
+**Action:** Use context variables like `currentUser?.display_name` to personalize frontend empty states, and add actionable guidance (e.g. "Tap + to add content") specifically for users with appropriate roles like `owner`.
