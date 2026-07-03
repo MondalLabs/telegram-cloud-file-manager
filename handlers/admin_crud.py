@@ -66,11 +66,19 @@ async def _refresh_folder(client, update: Message | CallbackQuery, folder_id: Op
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_message(filters.command("cancel") & filters.private)
-@owner_only
+@approved_and_above
 async def cancel_command(client, message: Message, user: User) -> None:
     """Abort the active FSM workflow."""
     state, data = await fsm_service.get_state_and_data(user.telegram_id)
     await fsm_service.clear_state(user.telegram_id)
+
+    if state == "upload:waiting_files" and data:
+        instruction_msg_id = data.get("instruction_msg_id")
+        if instruction_msg_id:
+            try:
+                await client.delete_messages(message.chat.id, instruction_msg_id)
+            except Exception:
+                pass
 
     folder_id = None
     has_context = False
@@ -99,13 +107,18 @@ async def cancel_command(client, message: Message, user: User) -> None:
         from handlers.navigation import render_folder
         await render_folder(client, message, folder_id=str(folder_id) if folder_id else "root", page=1, user=user)
     else:
-        await message.reply(
-            "❌ Operation cancelled.",
-            reply_markup=admin_dashboard_kb(),
-        )
+        if user.role == UserRole.OWNER:
+            await message.reply(
+                "❌ Operation cancelled.",
+                reply_markup=admin_dashboard_kb(),
+            )
+        else:
+            await message.reply("❌ Operation cancelled.")
+            from handlers.navigation import render_folder
+            await render_folder(client, message, folder_id="root", page=1, user=user)
 
 @bot.on_callback_query(filters.regex(r"^cancel$"))
-@owner_only
+@approved_and_above
 async def cancel_callback(client, query: CallbackQuery, user: User) -> None:
     """Abort the active FSM workflow via inline button."""
     state, data = await fsm_service.get_state_and_data(user.telegram_id)
@@ -140,19 +153,26 @@ async def cancel_callback(client, query: CallbackQuery, user: User) -> None:
         await render_folder(client, query, folder_id=str(folder_id) if folder_id else "root", page=1, user=user)
     else:
         await query.answer()
-        await query.edit_message_text(
-            "❌ Operation cancelled.",
-            reply_markup=admin_dashboard_kb(),
-        )
+        if user.role == UserRole.OWNER:
+            await query.edit_message_text(
+                "❌ Operation cancelled.",
+                reply_markup=admin_dashboard_kb(),
+            )
+        else:
+            from handlers.navigation import render_folder
+            await render_folder(client, query, folder_id="root", page=1, user=user)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CREATE FOLDER FSM
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^cf:"))
-@owner_only
+@approved_and_above
 async def create_folder_start(client, query: CallbackQuery, user: User) -> None:
     """Start the Create Folder FSM: ask for a folder name."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_create_folder", False):
+        await query.answer("⛔ Access Denied: You do not have permission to create folders.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     parent_id = parts[1]  # "root" or a 24-char ObjectId string
@@ -175,9 +195,12 @@ async def create_folder_start(client, query: CallbackQuery, user: User) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^rf:"))
-@owner_only
+@approved_and_above
 async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
     """Start the Rename Folder FSM: ask for new name."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_rename", False):
+        await query.answer("⛔ Access Denied: You do not have permission to rename folders.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     folder_id = parts[1]
@@ -212,9 +235,12 @@ async def rename_folder_start(client, query: CallbackQuery, user: User) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^df:"))
-@owner_only
+@approved_and_above
 async def delete_folder_confirm(client, query: CallbackQuery, user: User) -> None:
     """Show the delete confirmation keyboard for a folder."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_delete", False):
+        await query.answer("Spacer: You do not have permission to delete folders.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     folder_id = parts[1]
@@ -245,9 +271,12 @@ async def delete_folder_confirm(client, query: CallbackQuery, user: User) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^renf:"))
-@owner_only
+@approved_and_above
 async def rename_file_start(client, query: CallbackQuery, user: User) -> None:
     """Start the Rename File FSM: ask for new name."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_rename", False):
+        await query.answer("⛔ Access Denied: You do not have permission to rename files.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     file_doc_id = parts[1]
@@ -280,9 +309,12 @@ async def rename_file_start(client, query: CallbackQuery, user: User) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^delf:"))
-@owner_only
+@approved_and_above
 async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
     """Show the delete confirmation keyboard for a file."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_delete", False):
+        await query.answer("⛔ Access Denied: You do not have permission to delete files.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     file_doc_id = parts[1]
@@ -314,7 +346,7 @@ async def delete_file_confirm(client, query: CallbackQuery, user: User) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^yes:"))
-@owner_only
+@approved_and_above
 async def confirm_action(client, query: CallbackQuery, user: User) -> None:
     """Execute the confirmed destructive action."""
     await query.answer()
@@ -326,6 +358,9 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     if action == ACTION_DF:
         # Delete folder tree
+        if user.role != UserRole.OWNER and not getattr(user, "can_delete", False):
+            await query.answer("⛔ Access Denied: You do not have folder deletion permission.", show_alert=True)
+            return
         if not PydanticObjectId.is_valid(target_id):
             await query.answer("❌ Invalid folder ID.", show_alert=True)
             return
@@ -338,10 +373,18 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
             await render_folder(client, query, folder_id=parent_id, page=1, user=user)
         except Exception as e:
             log.error("delete_folder_tree error: %s", e)
-            await query.edit_message_text("❌ Internal Error: Could not delete folder tree.", reply_markup=admin_dashboard_kb())
+            if user.role == UserRole.OWNER:
+                await query.edit_message_text("❌ Internal Error: Could not delete folder tree.", reply_markup=admin_dashboard_kb())
+            else:
+                await query.edit_message_text("❌ Internal Error: Could not delete folder tree.")
+                from handlers.navigation import render_folder
+                await render_folder(client, query, folder_id="root", page=1, user=user)
 
     elif action == ACTION_DEL_FILE:
         # Delete single file
+        if user.role != UserRole.OWNER and not getattr(user, "can_delete", False):
+            await query.answer("⛔ Access Denied: You do not have file deletion permission.", show_alert=True)
+            return
         if not PydanticObjectId.is_valid(target_id):
             await query.answer("❌ Invalid file ID.", show_alert=True)
             return
@@ -357,6 +400,9 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
 
     elif action == ACTION_USR_REVOKE:
         # Revoke user access — routed here because confirm_action owns all yes: callbacks
+        if user.role != UserRole.OWNER:
+            await query.answer("⛔ Access Denied: Super-admin only.", show_alert=True)
+            return
         import services.user_service as _user_svc
         from keyboards.admin_kb import user_management_kb as _umgmt_kb
         target = await _user_svc.find_user_by_id_doc(target_id)
@@ -373,36 +419,56 @@ async def confirm_action(client, query: CallbackQuery, user: User) -> None:
         )
 
     else:
-        await query.edit_message_text("❌ Unknown action.", reply_markup=admin_dashboard_kb())
+        if user.role == UserRole.OWNER:
+            await query.edit_message_text("❌ Unknown action.", reply_markup=admin_dashboard_kb())
+        else:
+            await query.edit_message_text("❌ Unknown action.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FSM TEXT ROUTER — processes name inputs for active FSM states
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on_message(filters.text & filters.private & ~filters.command(["start", "cancel", "done"]))
-@owner_only
+@approved_and_above
 async def fsm_text_router(client, message: Message, user: User) -> None:
     """
-    Routes incoming text messages from the owner to the active FSM state handler.
-    If no state is active, silently ignore (the guest handler won't fire for owners).
+    Routes incoming text messages from the approved user to the active FSM state handler.
+    If no state is active, silently ignore.
     """
     state, data = await fsm_service.get_state_and_data(user.telegram_id)
 
     if state == "create_folder:waiting_name":
+        if user.role != UserRole.OWNER and not getattr(user, "can_create_folder", False):
+            await message.reply("⛔ Access Denied: You do not have folder creation permission.")
+            await fsm_service.clear_state(user.telegram_id)
+            return
         await _handle_create_folder(client, message, user, data)
 
     elif state == "rename_folder:waiting_name":
+        if user.role != UserRole.OWNER and not getattr(user, "can_rename", False):
+            await message.reply("⛔ Access Denied: You do not have folder rename permission.")
+            await fsm_service.clear_state(user.telegram_id)
+            return
         await _handle_rename_folder(client, message, user, data)
 
     elif state == "rename_file:waiting_name":
+        if user.role != UserRole.OWNER and not getattr(user, "can_rename", False):
+            await message.reply("⛔ Access Denied: You do not have file rename permission.")
+            await fsm_service.clear_state(user.telegram_id)
+            return
         await _handle_rename_file(client, message, user, data)
 
     elif state is None:
-        # Owner sent a text with no active FSM — show the dashboard
-        await message.reply(
-            "ℹ️ Use the buttons below to navigate.",
-            reply_markup=admin_dashboard_kb(),
-        )
+        if user.role == UserRole.OWNER:
+            # Owner sent a text with no active FSM — show the dashboard
+            await message.reply(
+                "ℹ️ Use the buttons below to navigate.",
+                reply_markup=admin_dashboard_kb(),
+            )
+        else:
+            # For non-owners, redirect them to the home folder listing
+            from handlers.navigation import render_folder
+            await render_folder(client, message, folder_id="root", page=1, user=user)
 
 async def _handle_create_folder(client, message: Message, user: User, data: dict) -> None:
     """Process the folder name input for the Create Folder FSM."""

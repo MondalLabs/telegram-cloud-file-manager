@@ -44,6 +44,13 @@ class User(Document):
     allowed_folders: list[PydanticObjectId] = Field(default_factory=list)
     blocked_folders: list[PydanticObjectId] = Field(default_factory=list)
 
+    # ── Granular Exception Permissions (Non-Owner write-rights) ───────────────
+    can_upload: bool = False
+    can_create_folder: bool = False
+    can_rename: bool = False
+    can_delete: bool = False
+    can_move_copy: bool = False
+
     class Settings:
         name = "users"
         indexes = [

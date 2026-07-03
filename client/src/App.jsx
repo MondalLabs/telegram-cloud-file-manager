@@ -975,6 +975,60 @@ export default function App() {
     }
   };
 
+  const handleTogglePermission = async (userDocId, permName, value) => {
+    try {
+      triggerHaptic('light');
+      const u = usersList.find(x => x.user_doc_id === userDocId);
+      if (!u) return;
+
+      const payload = {
+        user_doc_id: userDocId,
+        can_upload: u.can_upload ?? false,
+        can_create_folder: u.can_create_folder ?? false,
+        can_rename: u.can_rename ?? false,
+        can_delete: u.can_delete ?? false,
+        can_move_copy: u.can_move_copy ?? false,
+      };
+      
+      payload[permName] = value;
+
+      if (isMockMode) {
+        setUsersList(prev => prev.map(item => {
+          if (item.user_doc_id === userDocId) {
+            return { ...item, [permName]: value };
+          }
+          return item;
+        }));
+        showToast('Permissions updated (Demo).', 'success');
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/users/permissions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to update permissions');
+      }
+      
+      setUsersList(prev => prev.map(item => {
+        if (item.user_doc_id === userDocId) {
+          return { ...item, [permName]: value };
+        }
+        return item;
+      }));
+      showToast('Permissions updated.', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, 'error');
+    }
+  };
+
   const handlePurgeBroken = async (fileIds) => {
     if (!fileIds || fileIds.length === 0) return;
     try {
@@ -1420,7 +1474,8 @@ export default function App() {
       </div>
 
       {/* ── 5. ZArchiver Round FAB Button with Paste Toggle ────────────────── */}
-      {currentUser?.role?.toLowerCase() === 'owner' && (
+      {((currentUser?.role?.toLowerCase() === 'owner') || 
+        (clipboard ? currentUser?.can_move_copy : currentUser?.can_create_folder)) && (
         <>
           {clipboard ? (
             <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', zIndex: 200 }}>
@@ -1585,12 +1640,14 @@ export default function App() {
                 <span>Properties</span>
               </button>
 
-              {currentUser?.role?.toLowerCase() === 'owner' && (
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_rename) && (
+                <button className="z-sheet-option" onClick={() => { setIsRenameOpen(true); setRenameValue(activeItem.name); }}>
+                  <Edit3 size={16} />
+                  <span>Rename</span>
+                </button>
+              )}
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_move_copy) && (
                 <>
-                  <button className="z-sheet-option" onClick={() => { setIsRenameOpen(true); setRenameValue(activeItem.name); }}>
-                    <Edit3 size={16} />
-                    <span>Rename</span>
-                  </button>
                   <button className="z-sheet-option" onClick={startCopyFlow}>
                     <Copy size={16} />
                     <span>Copy</span>
@@ -1599,11 +1656,13 @@ export default function App() {
                     <Move size={16} />
                     <span>Move</span>
                   </button>
-                  <button className="z-sheet-option danger" onClick={() => { handleDelete(activeItem); }}>
-                    <Trash2 size={16} />
-                    <span>Delete Permanently</span>
-                  </button>
                 </>
+              )}
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_delete) && (
+                <button className="z-sheet-option danger" onClick={() => { handleDelete(activeItem); }}>
+                  <Trash2 size={16} />
+                  <span>Delete Permanently</span>
+                </button>
               )}
               
               <button className="z-sheet-option" onClick={() => setActiveItem(null)} style={{ marginTop: '8px', justifyContent: 'center', background: 'rgba(255,255,255,0.03)' }}>
@@ -1957,6 +2016,32 @@ export default function App() {
                                   </button>
                                 </span>
                               ))}
+                            </div>
+
+                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', fontWeight: 500 }}>Delegated Management Permissions:</span>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 14px', marginTop: '2px' }}>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_upload || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_upload', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Upload Files
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_create_folder || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_create_folder', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Create Folders
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_rename || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_rename', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Rename Items
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_delete || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_delete', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Delete Items
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_move_copy || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_move_copy', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Move / Copy
+                                </label>
+                              </div>
                             </div>
                           </div>
                         )}

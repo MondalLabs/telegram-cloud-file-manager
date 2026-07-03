@@ -136,10 +136,18 @@ async def render_folder(
         keyboard = build_empty_folder_keyboard(
             current_id=current_id,
             back_id=back_parent_id,
-            is_admin=is_admin,
+            user=user,
         )
-        if is_admin:
-            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}. Tap ➕ New Folder or 📤 Upload below to add content._"
+        can_upload = is_admin or getattr(user, "can_upload", False)
+        can_create = is_admin or getattr(user, "can_create_folder", False)
+        if can_create or can_upload:
+            actions = []
+            if can_create:
+                actions.append("➕ New Folder")
+            if can_upload:
+                actions.append("📤 Upload")
+            actions_str = " or ".join(actions)
+            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}. Tap {actions_str} below to add content._"
         else:
             text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}._"
     else:
@@ -166,7 +174,7 @@ async def render_folder(
             pg=pg,
             current_id=current_id,
             back_id=back_parent_id,
-            is_admin=is_admin,
+            user=user,
         )
 
     # Render

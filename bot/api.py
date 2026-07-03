@@ -84,6 +84,14 @@ class SettingsUpdateRequest(BaseModel):
     bot_name: Optional[str] = None
     auto_delete_hours: Optional[float] = None
 
+class UserPermissionsRequest(BaseModel):
+    user_doc_id: str
+    can_upload: bool
+    can_create_folder: bool
+    can_rename: bool
+    can_delete: bool
+    can_move_copy: bool
+
 # ── Dependency Injection Gating ────────────────────────────────────────────────
 
 async def get_current_user(x_telegram_init_data: str = Header(..., alias="X-Telegram-Init-Data")) -> User:
@@ -112,6 +120,17 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
     if user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Requires administrator access")
     return user
+
+
+def require_permission(permission_name: str):
+    """Dependency factory checking if caller is Owner or Approved with the specific permission."""
+    async def dependency(user: User = Depends(get_current_user)) -> User:
+        if user.role == UserRole.OWNER:
+            return user
+        if user.role == UserRole.APPROVED and getattr(user, permission_name, False):
+            return user
+        raise HTTPException(status_code=403, detail=f"Permission denied: requires {permission_name}")
+    return dependency
 
 # ── API Endpoints ─────────────────────────────────────────────────────────────
 
@@ -212,7 +231,7 @@ async def api_get_folder_size(folder_id: str, user: User = Depends(get_current_u
     return stats
 
 @router.post("/folders/create")
-async def api_create_folder(req: FolderCreateRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_create_folder(req: FolderCreateRequest, user: User = Depends(require_permission("can_create_folder"))) -> dict:
     """Create a virtual folder (Admin only)."""
     parent_id_str = req.parent_id
     if parent_id_str == "root":
@@ -235,7 +254,7 @@ async def api_create_folder(req: FolderCreateRequest, user: User = Depends(get_a
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/rename")
-async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(require_permission("can_rename"))) -> dict:
     """Rename a virtual folder (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -249,7 +268,7 @@ async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(get_a
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/delete")
-async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(require_permission("can_delete"))) -> dict:
     """Deletes a virtual folder subtree and its files (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -266,7 +285,7 @@ async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(get_a
         raise HTTPException(status_code=500, detail="Internal deletion error")
 
 @router.post("/folders/move")
-async def api_move_folder(req: FolderMoveRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_move_folder(req: FolderMoveRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Move a virtual folder (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -284,7 +303,7 @@ async def api_move_folder(req: FolderMoveRequest, user: User = Depends(get_admin
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/copy")
-async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Copy a virtual folder recursively (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -302,7 +321,7 @@ async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(get_admin
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/files/move")
-async def api_move_file(req: FileMoveRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_move_file(req: FileMoveRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Move a file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -319,7 +338,7 @@ async def api_move_file(req: FileMoveRequest, user: User = Depends(get_admin_use
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/copy")
-async def api_copy_file(req: FileCopyRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_copy_file(req: FileCopyRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Copy a file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -336,7 +355,7 @@ async def api_copy_file(req: FileCopyRequest, user: User = Depends(get_admin_use
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/rename")
-async def api_rename_file(req: FileRenameRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_rename_file(req: FileRenameRequest, user: User = Depends(require_permission("can_rename"))) -> dict:
     """Rename an indexed file (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -347,7 +366,7 @@ async def api_rename_file(req: FileRenameRequest, user: User = Depends(get_admin
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/delete")
-async def api_delete_file(req: FileDeleteRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_delete_file(req: FileDeleteRequest, user: User = Depends(require_permission("can_delete"))) -> dict:
     """Delete an indexed file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -438,9 +457,34 @@ async def get_admin_users(user: User = Depends(get_admin_user)) -> List[dict]:
             "role": u.role,
             "approved_at": u.approved_at.isoformat() if u.approved_at else None,
             "allowed_folders": allowed_names,
-            "blocked_folders": blocked_names
+            "blocked_folders": blocked_names,
+            "can_upload": getattr(u, "can_upload", False),
+            "can_create_folder": getattr(u, "can_create_folder", False),
+            "can_rename": getattr(u, "can_rename", False),
+            "can_delete": getattr(u, "can_delete", False),
+            "can_move_copy": getattr(u, "can_move_copy", False),
         })
     return res
+
+
+@router.post("/admin/users/permissions")
+async def api_update_user_permissions(req: UserPermissionsRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Update granular exceptions/permissions for a user (Admin only)."""
+    if not PydanticObjectId.is_valid(req.user_doc_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    target_user = await User.get(PydanticObjectId(req.user_doc_id))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    target_user.can_upload = req.can_upload
+    target_user.can_create_folder = req.can_create_folder
+    target_user.can_rename = req.can_rename
+    target_user.can_delete = req.can_delete
+    target_user.can_move_copy = req.can_move_copy
+    await target_user.save()
+    
+    return {"status": "ok"}
 
 @router.post("/admin/users/exceptions/allow")
 async def api_allow_folder(req: UserExceptionRequest, user: User = Depends(get_admin_user)) -> dict:
