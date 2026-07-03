@@ -39,7 +39,7 @@ from beanie import PydanticObjectId
 
 from bot.client import bot
 from models.user import User, UserRole
-from middlewares.access_control import owner_only
+from middlewares.access_control import owner_only, approved_and_above
 from keyboards.admin_kb import upload_cancel_kb, admin_dashboard_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
