@@ -1392,9 +1392,16 @@ export default function App() {
             <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Loading paths...</span>
           </div>
         ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', opacity: 0.5 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', opacity: 0.5, padding: '0 20px', textAlign: 'center' }}>
             <Folder size={36} style={{ strokeWidth: 1.5, color: 'var(--hint-color)' }} />
-            <span style={{ fontSize: '0.8rem', marginTop: '8px' }}>This folder is empty</span>
+            <span style={{ fontSize: '0.8rem', marginTop: '8px' }}>
+              This folder is empty{currentUser?.display_name ? `, ${currentUser.display_name}` : ''}.
+            </span>
+            {currentUser?.role?.toLowerCase() === 'owner' && (
+              <span style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                Tap <Plus size={12} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> below to add content.
+              </span>
+            )}
           </div>
         ) : (
           <>
