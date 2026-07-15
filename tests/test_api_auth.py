@@ -76,6 +76,53 @@ def test_verify_telegram_init_data_invalid_hash():
     is_valid, _ = verify_telegram_init_data(init_data_qs, bot_token)
     assert is_valid is False
 
+def test_verify_telegram_init_data_missing_hash():
+    is_valid, _ = verify_telegram_init_data("auth_date=12345", "token")
+    assert is_valid is False
+
+def test_verify_telegram_init_data_missing_auth_date():
+    is_valid, _ = verify_telegram_init_data("hash=123", "token")
+    assert is_valid is False
+
+def test_verify_telegram_init_data_invalid_auth_date_format():
+    is_valid, _ = verify_telegram_init_data("hash=123&auth_date=not_an_int", "token")
+    assert is_valid is False
+
+def test_verify_telegram_init_data_missing_user():
+    bot_token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+    auth_date = int(time.time())
+    data_dict = {
+        "auth_date": str(auth_date),
+    }
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data_dict.items()))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    data_dict["hash"] = expected_hash
+    init_data_qs = urlencode(data_dict)
+    
+    is_valid, _ = verify_telegram_init_data(init_data_qs, bot_token)
+    assert is_valid is False
+
+def test_verify_telegram_init_data_invalid_user_json():
+    bot_token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+    auth_date = int(time.time())
+    data_dict = {
+        "auth_date": str(auth_date),
+        "user": "{invalid json"
+    }
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data_dict.items()))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    data_dict["hash"] = expected_hash
+    init_data_qs = urlencode(data_dict)
+    
+    is_valid, _ = verify_telegram_init_data(init_data_qs, bot_token)
+    assert is_valid is False
+
+def test_verify_telegram_init_data_exception_on_parse():
+    is_valid, _ = verify_telegram_init_data(12345, "token")
+    assert is_valid is False
+
 # ── Part 2: FastAPI Dependency Injection Tests ──────────────────────────────
 
 @pytest.mark.anyio

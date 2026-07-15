@@ -1,5 +1,5 @@
 import pytest
-from utils.callback_data import encode
+from utils.callback_data import encode, action_of
 
 def test_encode_happy_path():
     assert encode("nav", "6a08ce62ae36ee491a35cd99", 2) == "nav:6a08ce62ae36ee491a35cd99:2"
@@ -25,3 +25,7 @@ def test_encode_multiple_args():
 
 def test_encode_unicode():
     assert encode("nav", "你好") == "nav:你好"
+
+def test_action_of():
+    assert action_of("nav:6a08ce62ae36ee491a35cd99:2") == "nav"
+    assert action_of("cancel") == "cancel"

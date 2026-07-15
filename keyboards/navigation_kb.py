@@ -27,6 +27,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from models.folder import Folder
 from models.file import File
+from models.user import User, UserRole
 from utils.callback_data import encode, ACTION_NAV, ACTION_PLAY, ACTION_BACK
 from utils.callback_data import ACTION_CF, ACTION_UPL, ACTION_FOLDER_INFO, ACTION_FILE_INFO
 from utils.pagination import paginate, Page
@@ -69,7 +70,7 @@ def build_folder_keyboard(
     pg: Page[tuple[str, Folder | File]],
     current_id: str,        # The folder being VIEWED (used for New Folder / Upload / pagination)
     back_id: Optional[str], # The parent folder (used for Back button; None = at root)
-    is_admin: bool,
+    user: User,
 ) -> InlineKeyboardMarkup:
     """
     Build the paginated directory listing keyboard.
@@ -78,18 +79,27 @@ def build_folder_keyboard(
         pg:         A Page object containing the slice of folders and files to display.
         current_id: The _id of the folder being viewed ("root" if at root).
         back_id:    The _id of the parent folder (None if already at root).
-        is_admin:   Render admin action buttons (⚙️, ➕, 📤) if True.
+        user:       The User object requesting the layout (used to dynamically render permissions).
     """
     rows: list[list[InlineKeyboardButton]] = []
+
+    is_owner = user.role == UserRole.OWNER
+    can_upload = is_owner or getattr(user, "can_upload", False)
+    can_create = is_owner or getattr(user, "can_create_folder", False)
+    can_rename = is_owner or getattr(user, "can_rename", False)
+    can_delete = is_owner or getattr(user, "can_delete", False)
+
+    # Show the ⚙️ settings button next to folders/files only if user has manage/delete rights
+    show_gear = can_rename or can_delete
 
     for kind, item in pg.items:
         if kind == "folder":
             row = [_folder_button(item)]
-            if is_admin:
+            if show_gear:
                 row.append(_folder_info_button(item))
         else:
             row = [_file_button(item)]
-            if is_admin:
+            if show_gear:
                 row.append(_file_info_button(item))
         rows.append(row)
 
@@ -120,31 +130,40 @@ def build_folder_keyboard(
 
         rows.append(nav_row)
 
-    # ── Footer row ────────────────────────────────────────────────────────────
-    footer: list[InlineKeyboardButton] = []
+    # ── Footer rows ───────────────────────────────────────────────────────────
+    footer_row = []
+    if can_create:
+        footer_row.append(InlineKeyboardButton(
+            text="➕ New Folder",
+            callback_data=encode(ACTION_CF, current_id),
+        ))
+    if can_upload:
+        footer_row.append(InlineKeyboardButton(
+            text="📤 Upload",
+            callback_data=encode(ACTION_UPL, current_id),
+        ))
+    if footer_row:
+        rows.append(footer_row)
 
+    nav_row: list[InlineKeyboardButton] = []
     if back_id:
-        footer.append(InlineKeyboardButton(
+        nav_row.append(InlineKeyboardButton(
             text="⬆️ Back",
             callback_data=encode(ACTION_BACK, back_id),
         ))
     else:
-        footer.append(InlineKeyboardButton(
-            text="🏠 Home",
-            callback_data="home",
-        ))
+        if is_owner:
+            nav_row.append(InlineKeyboardButton(
+                text="🛠️ Dashboard",
+                callback_data="dashboard",
+            ))
+        else:
+            nav_row.append(InlineKeyboardButton(
+                text="🔄 Refresh",
+                callback_data="home",
+            ))
 
-    if is_admin:
-        footer.append(InlineKeyboardButton(
-            text="➕ New Folder",
-            callback_data=encode(ACTION_CF, current_id),
-        ))
-        footer.append(InlineKeyboardButton(
-            text="📤 Upload",
-            callback_data=encode(ACTION_UPL, current_id),
-        ))
-
-    rows.append(footer)
+    rows.append(nav_row)
 
     return InlineKeyboardMarkup(rows)
 
@@ -152,30 +171,47 @@ def build_folder_keyboard(
 def build_empty_folder_keyboard(
     current_id: str,        # The folder being VIEWED
     back_id: Optional[str], # The parent folder (None if at root)
-    is_admin: bool,
+    user: User,
 ) -> InlineKeyboardMarkup:
     """Keyboard shown when a folder is empty."""
-    footer: list[InlineKeyboardButton] = []
+    rows: list[list[InlineKeyboardButton]] = []
 
+    is_owner = user.role == UserRole.OWNER
+    can_upload = is_owner or getattr(user, "can_upload", False)
+    can_create = is_owner or getattr(user, "can_create_folder", False)
+
+    footer_row = []
+    if can_create:
+        footer_row.append(InlineKeyboardButton(
+            text="➕ New Folder",
+            callback_data=encode(ACTION_CF, current_id),
+        ))
+    if can_upload:
+        footer_row.append(InlineKeyboardButton(
+            text="📤 Upload",
+            callback_data=encode(ACTION_UPL, current_id),
+        ))
+    if footer_row:
+        rows.append(footer_row)
+
+    nav_row: list[InlineKeyboardButton] = []
     if back_id:
-        footer.append(InlineKeyboardButton(
+        nav_row.append(InlineKeyboardButton(
             text="⬆️ Back",
             callback_data=encode(ACTION_BACK, back_id),
         ))
     else:
-        footer.append(InlineKeyboardButton(
-            text="🏠 Home",
-            callback_data="home",
-        ))
+        if is_owner:
+            nav_row.append(InlineKeyboardButton(
+                text="🛠️ Dashboard",
+                callback_data="dashboard",
+            ))
+        else:
+            nav_row.append(InlineKeyboardButton(
+                text="🔄 Refresh",
+                callback_data="home",
+            ))
 
-    if is_admin:
-        footer.append(InlineKeyboardButton(
-            text="➕ New Folder",
-            callback_data=encode(ACTION_CF, current_id),
-        ))
-        footer.append(InlineKeyboardButton(
-            text="📤 Upload",
-            callback_data=encode(ACTION_UPL, current_id),
-        ))
+    rows.append(nav_row)
 
-    return InlineKeyboardMarkup([footer] if footer else [[]])
+    return InlineKeyboardMarkup(rows)

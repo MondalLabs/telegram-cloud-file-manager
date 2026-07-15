@@ -100,20 +100,23 @@ async def render_folder(
                 await update.reply("🔒 Access Denied: Restricted folder.")
             return
 
-    # Fetch all folders and files for filtering
-    all_folders = await folder_service.get_children(parent_id_obj)
-    all_files = await file_service.get_files_in_folder(parent_id_obj)
+    # Fetch all folders and files for filtering concurrently
+    all_folders, all_files = await asyncio.gather(
+        folder_service.get_children(parent_id_obj),
+        file_service.get_files_in_folder(parent_id_obj)
+    )
 
-    # Filter by user permissions
-    allowed_folders = []
-    for f in all_folders:
-        if await user_service.has_folder_access(user, f.id):
-            allowed_folders.append(f)
+    # Filter by user permissions concurrently
+    folder_access_results = await asyncio.gather(
+        *(user_service.has_folder_access(user, f.id) for f in all_folders)
+    )
+    allowed_folders = [
+        f for f, has_access in zip(all_folders, folder_access_results) if has_access
+    ]
 
     allowed_files = []
-    # Since files are inside this parent folder, if parent folder is accessible, all files inside are.
-    # Root files (parent_id_obj is None) are always accessible since root has_folder_access is True.
-    allowed_files = all_files
+    if await user_service.has_file_access(user, parent_id_obj):
+        allowed_files = all_files
 
     folder_count = len(allowed_folders)
     file_count = len(allowed_files)
@@ -133,10 +136,18 @@ async def render_folder(
         keyboard = build_empty_folder_keyboard(
             current_id=current_id,
             back_id=back_parent_id,
-            is_admin=is_admin,
+            user=user,
         )
-        if is_admin:
-            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}. Tap ➕ New Folder or 📤 Upload below to add content._"
+        can_upload = is_admin or getattr(user, "can_upload", False)
+        can_create = is_admin or getattr(user, "can_create_folder", False)
+        if can_create or can_upload:
+            actions = []
+            if can_create:
+                actions.append("➕ New Folder")
+            if can_upload:
+                actions.append("📤 Upload")
+            actions_str = " or ".join(actions)
+            text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}. Tap {actions_str} below to add content._"
         else:
             text += f"\n\n_This folder is empty, {escape_markdown(user.display_name)}._"
     else:
@@ -163,7 +174,7 @@ async def render_folder(
             pg=pg,
             current_id=current_id,
             back_id=back_parent_id,
-            is_admin=is_admin,
+            user=user,
         )
 
     # Render

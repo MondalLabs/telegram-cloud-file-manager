@@ -12,7 +12,7 @@ Design:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from beanie import Document, PydanticObjectId
@@ -23,7 +23,8 @@ from pymongo import IndexModel, ASCENDING
 class Folder(Document):
     name: str
     parent_id: Optional[PydanticObjectId] = None  # None = root-level
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    size: int = 0  # Total size of all files in this folder and its subfolders recursively
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: int  # Telegram user ID of the admin who created this folder
 
     class Settings:

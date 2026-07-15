@@ -14,7 +14,7 @@ to OWNER on first contact.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from models.user import User, UserRole
@@ -74,13 +74,13 @@ async def approve_user(telegram_id: int, approved_by: int) -> Optional[User]:
     if user.role == UserRole.OWNER:
         raise ValueError("Cannot change the role of the bot owner.")
     user.role = UserRole.APPROVED
-    user.approved_at = datetime.utcnow()
+    user.approved_at = datetime.now(timezone.utc)
     user.approved_by = approved_by
     user.revoked_at = None
     await user.save()
     return user
-
-
+    
+    
 async def revoke_user(telegram_id: int) -> Optional[User]:
     """Downgrade a user back to GUEST. Returns None if user not found."""
     user = await User.find_one(User.telegram_id == telegram_id)
@@ -89,7 +89,7 @@ async def revoke_user(telegram_id: int) -> Optional[User]:
     if user.role == UserRole.OWNER:
         raise ValueError("Cannot revoke the bot owner's access.")
     user.role = UserRole.GUEST
-    user.revoked_at = datetime.utcnow()
+    user.revoked_at = datetime.now(timezone.utc)
     await user.save()
     return user
 
@@ -129,15 +129,62 @@ async def find_user_by_id_doc(user_doc_id: str) -> Optional[User]:
         return None
 
 
+async def has_file_access(user: User, folder_id: Optional[PydanticObjectId]) -> bool:
+    """
+    Evaluate file access to a specific folder:
+    1. If user is OWNER: access is always granted.
+    2. If folder_id is None (Root): viewable if allowed_folders is empty, otherwise blocked by default.
+    3. Resolves using "closest rule wins" walking up the ancestor chain from the folder to root.
+       The first matching rule (either in user.blocked_folders or user.allowed_folders) determines the result.
+    4. If no rules match:
+       - If user.allowed_folders is empty: allowed.
+       - Otherwise: blocked (whitelist model).
+    """
+    if user.role == UserRole.OWNER:
+        return True
+
+    # ⚡ Bolt Optimization: Early return skips expensive O(Depth) DB queries
+    # when the user has no specific folder rules configured (which is the default).
+    # This prevents an N+1 query explosion during directory listing where this
+    # function is called concurrently for every child item.
+    if not user.blocked_folders and not user.allowed_folders:
+        return True
+
+    # Build ancestor path (including folder_id itself)
+    import services.folder_service as folder_service
+    path_ids = []
+    
+    if folder_id is not None:
+        curr_id = folder_id
+        while curr_id is not None:
+            path_ids.append(curr_id)
+            folder = await folder_service.get_folder(curr_id)
+            if folder is None:
+                break
+            curr_id = folder.parent_id
+
+    blocked_set = set(user.blocked_folders)
+    allowed_set = set(user.allowed_folders)
+
+    # Walk up the chain: closest rule wins
+    for pid in path_ids:
+        if pid in blocked_set:
+            return False
+        if pid in allowed_set:
+            return True
+
+    # If no rule was found in the hierarchy
+    if not allowed_set:
+        return True
+    return False
+
+
 async def has_folder_access(user: User, folder_id: Optional[PydanticObjectId]) -> bool:
     """
-    Evaluate folder access exceptions:
-    1. If user is OWNER: access is always granted.
-    2. If folder_id is None (Root): viewable by default.
-    3. If any folder in the ancestor chain is in user.blocked_folders: access is blocked.
-    4. If user.allowed_folders is empty: access is allowed by default.
-    5. If any folder in the ancestor chain is in user.allowed_folders: access is explicitly allowed.
-    6. Otherwise: blocked (whitelisted model).
+    Evaluate if a folder is navigable by the user:
+    1. If folder_id is None (Root): always navigable.
+    2. If the user has file access to this folder: navigable.
+    3. If this folder is an ancestor of any folder in user.allowed_folders: navigable.
     """
     if user.role == UserRole.OWNER:
         return True
@@ -145,34 +192,23 @@ async def has_folder_access(user: User, folder_id: Optional[PydanticObjectId]) -
     if folder_id is None:
         return True
 
-    # Build ancestor path (including folder_id itself)
-    import services.folder_service as folder_service
-    path_ids = []
-    curr_id = folder_id
-    while curr_id is not None:
-        path_ids.append(curr_id)
-        folder = await folder_service.get_folder(curr_id)
-        if folder is None:
-            break
-        curr_id = folder.parent_id
-
-    # Check rule 1: explicitly blocked folder or ancestor
-    blocked_set = set(user.blocked_folders)
-    for pid in path_ids:
-        if pid in blocked_set:
-            return False
-
-    # Check rule 2: if no explicit whitelisting exists, then it's allowed by default (since not blocked)
-    if not user.allowed_folders:
+    # Direct access check
+    if await has_file_access(user, folder_id):
         return True
 
-    # Check rule 3: explicitly allowed folder or ancestor
-    allowed_set = set(user.allowed_folders)
-    for pid in path_ids:
-        if pid in allowed_set:
-            return True
+    # Check if folder_id is an ancestor of any allowed folders
+    import services.folder_service as folder_service
+    for allowed_id in user.allowed_folders:
+        curr_id = allowed_id
+        while curr_id is not None:
+            # Walk up to find folder_id
+            if curr_id == folder_id:
+                return True
+            folder = await folder_service.get_folder(curr_id)
+            if folder is None:
+                break
+            curr_id = folder.parent_id
 
-    # Whitelist model: if not explicitly allowed and allow list is not empty, it's blocked.
     return False
 
 

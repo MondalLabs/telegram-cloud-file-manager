@@ -33,6 +33,8 @@ from models.file import File
 from models.user import User
 from models.state import FSMState
 from models.settings import BotSettings
+from models.auto_delete import AutoDeleteJob
+
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 import handlers.setup
@@ -66,9 +68,24 @@ async def _init_db():
     mongo_client = AsyncMongoClient(settings.mongo_uri)
     await init_beanie(
         database=mongo_client[settings.db_name],
-        document_models=[Folder, File, User, FSMState, BotSettings],
+        document_models=[Folder, File, User, FSMState, BotSettings, AutoDeleteJob],
     )
     log.info("DB ready.")
+    
+    # Load live settings from MongoDB into config cache
+    log.info("Loading live settings configuration...")
+    db_settings = await BotSettings.get_global()
+    settings.update_cache(
+        protect_content=db_settings.protect_content,
+        items_per_page=db_settings.items_per_page,
+        bot_name=db_settings.bot_name,
+        auto_delete_hours=db_settings.auto_delete_hours,
+    )
+    
+    log.info("Synchronizing folder sizes...")
+    from services.folder_service import recalculate_all_folder_sizes
+    await recalculate_all_folder_sizes()
+    log.info("Folder sizes synchronized.")
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────
@@ -92,6 +109,10 @@ async def _run():
     # Step 3: Start the bot (one connection, same event loop as DB)
     await bot.start()
     log.info("Starting bot...")
+
+    # Step 3.5: Hydrate pending auto-deletions from DB
+    from services.auto_delete_service import hydrate_auto_deletions
+    asyncio.create_task(hydrate_auto_deletions(bot))
 
     # Step 4: Register bot commands now that the client is connected
     from pyrogram.types import BotCommand

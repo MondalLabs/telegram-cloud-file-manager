@@ -110,6 +110,15 @@ export default function App() {
   const [selectedFolderForException, setSelectedFolderForException] = useState('');
   const [exceptionRuleType, setExceptionRuleType] = useState('allow'); // 'allow' | 'block'
 
+  // Admin Settings
+  const [settingsData, setSettingsData] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [botNameInput, setBotNameInput] = useState('');
+  const [itemsPerPageInput, setItemsPerPageInput] = useState(15);
+  const [autoDeleteHoursInput, setAutoDeleteHoursInput] = useState(1.0);
+  const [protectContentInput, setProtectContentInput] = useState(true);
+
   // Authentication states
   const [isReady, setIsReady] = useState(false);
   const [initData, setInitData] = useState('');
@@ -203,11 +212,11 @@ export default function App() {
         if (folderId === 'root') {
           setFolderName('Root');
           setBreadcrumbs([]);
-          setFolders([
-            { id: 'f1', name: '🎥 Movies & Shows', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f2', name: '📚 Textbooks & E-books', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f3', name: '🎵 Audio & Music Album', created_at: new Date().toISOString(), created_by: 123456789 },
-            { id: 'f4', name: '🛡️ Restricted Documents (Admin)', created_at: new Date().toISOString(), created_by: 123456789 }
+           setFolders([
+            { id: 'f1', name: '🎥 Movies & Shows', created_at: new Date().toISOString(), created_by: 123456789, size: 2140000000 },
+            { id: 'f2', name: '📚 Textbooks & E-books', created_at: new Date().toISOString(), created_by: 123456789, size: 4560000 },
+            { id: 'f3', name: '🎵 Audio & Music Album', created_at: new Date().toISOString(), created_by: 123456789, size: 0 },
+            { id: 'f4', name: '🛡️ Restricted Documents (Admin)', created_at: new Date().toISOString(), created_by: 123456789, size: 0 }
           ]);
           setFiles([
             { id: 'doc1', name: 'Setup_Deployment_Guide.pdf', file_type: 'document', file_size: 4560000, uploaded_at: new Date().toISOString(), mime_type: 'application/pdf' },
@@ -217,7 +226,7 @@ export default function App() {
           setFolderName('Movies & Shows');
           setBreadcrumbs([{ id: 'f1', name: '🎥 Movies & Shows' }]);
           setFolders([
-            { id: 'f1_sub1', name: 'Marvel Cinematic Universe', created_at: new Date().toISOString() }
+            { id: 'f1_sub1', name: 'Marvel Cinematic Universe', created_at: new Date().toISOString(), size: 154000000 }
           ]);
           setFiles([
             { id: 'vid2', name: 'IronMan_4K_Trailer.mp4', file_type: 'video', file_size: 154000000, uploaded_at: new Date().toISOString() }
@@ -296,10 +305,11 @@ export default function App() {
       let comparison = 0;
       if (sortBy === 'name') {
         comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === 'size') {
+        comparison = (a.size || 0) - (b.size || 0);
       } else if (sortBy === 'date') {
         comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
       } else {
-        // Fallback to name comparison for folders
         comparison = a.name.localeCompare(b.name);
       }
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -965,6 +975,60 @@ export default function App() {
     }
   };
 
+  const handleTogglePermission = async (userDocId, permName, value) => {
+    try {
+      triggerHaptic('light');
+      const u = usersList.find(x => x.user_doc_id === userDocId);
+      if (!u) return;
+
+      const payload = {
+        user_doc_id: userDocId,
+        can_upload: u.can_upload ?? false,
+        can_create_folder: u.can_create_folder ?? false,
+        can_rename: u.can_rename ?? false,
+        can_delete: u.can_delete ?? false,
+        can_move_copy: u.can_move_copy ?? false,
+      };
+      
+      payload[permName] = value;
+
+      if (isMockMode) {
+        setUsersList(prev => prev.map(item => {
+          if (item.user_doc_id === userDocId) {
+            return { ...item, [permName]: value };
+          }
+          return item;
+        }));
+        showToast('Permissions updated (Demo).', 'success');
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/users/permissions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to update permissions');
+      }
+      
+      setUsersList(prev => prev.map(item => {
+        if (item.user_doc_id === userDocId) {
+          return { ...item, [permName]: value };
+        }
+        return item;
+      }));
+      showToast('Permissions updated.', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, 'error');
+    }
+  };
+
   const handlePurgeBroken = async (fileIds) => {
     if (!fileIds || fileIds.length === 0) return;
     try {
@@ -991,14 +1055,142 @@ export default function App() {
         body: JSON.stringify({ file_ids: fileIds })
       });
 
-      if (!res.ok) throw new Error("Failed to purge broken references.");
-      const data = await res.json();
       showToast(`Purged ${data.purged_count} broken reference(s)!`, "success");
       runHealthCheck();
     } catch (err) {
       showToast(err.message, 'error');
     }
   };
+
+  const loadSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      if (isMockMode) {
+        await new Promise(r => setTimeout(r, 400));
+        const mockData = {
+          settings: {
+            protect_content: true,
+            items_per_page: 15,
+            bot_name: "Cloud Bot (Mock)",
+            auto_delete_hours: 1.0
+          },
+          defaults: {
+            protect_content: true,
+            items_per_page: 15,
+            bot_name: "",
+            auto_delete_hours: 1.0
+          },
+          overrides: {
+            protect_content: false,
+            items_per_page: false,
+            bot_name: true,
+            auto_delete_hours: false
+          }
+        };
+        setSettingsData(mockData);
+        setBotNameInput(mockData.settings.bot_name || '');
+        setItemsPerPageInput(mockData.settings.items_per_page);
+        setAutoDeleteHoursInput(mockData.settings.auto_delete_hours);
+        setProtectContentInput(mockData.settings.protect_content);
+        return;
+      }
+
+      const headers = {};
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/settings`, { headers });
+      if (!res.ok) throw new Error("Failed to load settings.");
+      const data = await res.json();
+      setSettingsData(data);
+      setBotNameInput(data.settings.bot_name || '');
+      setItemsPerPageInput(data.settings.items_per_page);
+      setAutoDeleteHoursInput(data.settings.auto_delete_hours);
+      setProtectContentInput(data.settings.protect_content);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (fieldToSave = null, valueToSave = null) => {
+    triggerHaptic('medium');
+    setSettingsSaving(true);
+    try {
+      let body = {};
+      if (fieldToSave) {
+        body[fieldToSave] = valueToSave;
+      } else {
+        const itemsVal = parseInt(itemsPerPageInput, 10);
+        if (isNaN(itemsVal) || itemsVal < 1 || itemsVal > 100) {
+          throw new Error("Items per page must be a number between 1 and 100");
+        }
+        const hoursVal = parseFloat(autoDeleteHoursInput);
+        if (isNaN(hoursVal) || hoursVal < 0 || hoursVal > 720) {
+          throw new Error("Auto delete hours must be a number between 0 and 720");
+        }
+        
+        body = {
+          bot_name: botNameInput.trim() || null,
+          items_per_page: itemsVal,
+          auto_delete_hours: hoursVal,
+          protect_content: protectContentInput
+        };
+      }
+
+      if (isMockMode) {
+        await new Promise(r => setTimeout(r, 400));
+        setSettingsData(prev => {
+          if (!prev) return null;
+          const newSettings = { ...prev.settings, ...body };
+          const newOverrides = { ...prev.overrides };
+          Object.keys(body).forEach(k => {
+            newOverrides[k] = body[k] !== null;
+          });
+          return {
+            ...prev,
+            settings: newSettings,
+            overrides: newOverrides
+          };
+        });
+        showToast("Settings saved successfully (Demo)", "success");
+        return;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+
+      const res = await fetch(`${API_BASE}/api/admin/settings`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to update settings.");
+      }
+      
+      const data = await res.json();
+      setSettingsData(data);
+      setBotNameInput(data.settings.bot_name || '');
+      setItemsPerPageInput(data.settings.items_per_page);
+      setAutoDeleteHoursInput(data.settings.auto_delete_hours);
+      setProtectContentInput(data.settings.protect_content);
+      
+      showToast("Settings saved successfully!", "success");
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminOpen && adminTab === 'settings') {
+      loadSettings();
+    }
+  }, [isAdminOpen, adminTab]);
 
   const formatBytes = (bytes, decimals = 2) => {
     if (!bytes) return '0 Bytes';
@@ -1103,6 +1295,8 @@ export default function App() {
             <button 
               style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '4px' }}
               onClick={handleNavigateUp}
+              aria-label="Navigate up"
+              title="Navigate up"
             >
               <ArrowUp size={20} />
             </button>
@@ -1116,6 +1310,7 @@ export default function App() {
           <button 
             style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
             onClick={() => { triggerHaptic('light'); setIsSortOpen(true); }}
+            aria-label="Sort options"
             title="Sort options"
           >
             <ArrowUpDown size={18} />
@@ -1123,6 +1318,8 @@ export default function App() {
           <button 
             style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            aria-label={viewMode === 'grid' ? "Switch to list view" : "Switch to grid view"}
+            title={viewMode === 'grid' ? "List view" : "Grid view"}
           >
             {viewMode === 'grid' ? <List size={18} /> : <Grid size={18} />}
           </button>
@@ -1130,6 +1327,8 @@ export default function App() {
             <button 
               style={{ background: 'none', border: 'none', color: 'var(--text-color)', cursor: 'pointer', padding: '6px' }}
               onClick={() => { triggerHaptic('light'); setIsAdminOpen(!isAdminOpen); if(!isAdminOpen) { loadAdminUsers(); loadAllFolders(); } }}
+              aria-label="Admin dashboard"
+              title="Admin dashboard"
             >
               <Shield size={18} />
             </button>
@@ -1168,11 +1367,17 @@ export default function App() {
             type="text" 
             placeholder="Search folders and files..."
             className="z-search-input"
+            aria-label="Search folders and files"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--hint-color)' }} onClick={() => setSearchQuery('')}>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--hint-color)' }}
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              title="Clear search"
+            >
               <X size={14} />
             </button>
           )}
@@ -1214,7 +1419,7 @@ export default function App() {
                   <div className="z-item-meta">
                     <span className="z-item-name">{folder.name}</span>
                     <span className="z-item-desc">
-                      Folder &bull; {new Date(folder.created_at).toLocaleDateString()}
+                      {folder.item_count !== undefined ? (folder.item_count === 0 ? 'Empty \u2022 ' : `${folder.item_count} item${folder.item_count !== 1 ? 's' : ''} \u2022 `) : ''}{formatBytes(folder.size || 0)} &bull; {new Date(folder.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>
@@ -1223,6 +1428,8 @@ export default function App() {
                   <button 
                     className="z-action-btn"
                     onClick={() => { triggerHaptic('light'); setActiveItem({ ...folder, type: 'folder' }); }}
+                    aria-label={`Options for folder ${folder.name}`}
+                    title="Folder options"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1253,12 +1460,16 @@ export default function App() {
                   <button 
                     className="z-action-btn play-btn"
                     onClick={() => handlePlayFile(file.id)}
+                    aria-label={`Play file ${file.name}`}
+                    title="Play file"
                   >
                     <Play size={14} fill="var(--success-color)" />
                   </button>
                   <button 
                     className="z-action-btn"
                     onClick={() => { triggerHaptic('light'); setActiveItem({ ...file, type: 'file' }); }}
+                    aria-label={`Options for file ${file.name}`}
+                    title="File options"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1270,7 +1481,8 @@ export default function App() {
       </div>
 
       {/* ── 5. ZArchiver Round FAB Button with Paste Toggle ────────────────── */}
-      {currentUser?.role?.toLowerCase() === 'owner' && (
+      {((currentUser?.role?.toLowerCase() === 'owner') || 
+        (clipboard ? currentUser?.can_move_copy : currentUser?.can_create_folder)) && (
         <>
           {clipboard ? (
             <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', zIndex: 200 }}>
@@ -1285,6 +1497,8 @@ export default function App() {
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)' 
                 }} 
                 onClick={() => { triggerHaptic('light'); setClipboard(null); }}
+                aria-label="Cancel paste operation"
+                title="Cancel paste operation"
               >
                 <X size={18} />
               </button>
@@ -1307,12 +1521,20 @@ export default function App() {
                     executePaste(); 
                   }
                 }}
+                aria-label="Paste clipboard item"
+                title={isPasteDisabled ? "Cannot paste here" : "Paste clipboard item"}
+                aria-disabled={isPasteDisabled}
               >
                 <Clipboard size={22} />
               </button>
             </div>
           ) : (
-            <button className="z-fab" onClick={() => { triggerHaptic('medium'); setIsCreateFolderOpen(true); }}>
+            <button
+              className="z-fab"
+              onClick={() => { triggerHaptic('medium'); setIsCreateFolderOpen(true); }}
+              aria-label="Create new folder"
+              title="Create new folder"
+            >
               <Plus size={24} />
             </button>
           )}
@@ -1329,6 +1551,8 @@ export default function App() {
               <button 
                 style={{ background: 'none', border: 'none', color: 'var(--hint-color)', cursor: 'pointer', padding: '4px' }}
                 onClick={() => setIsSortOpen(false)}
+                aria-label="Close sort options"
+                title="Close"
               >
                 <X size={18} />
               </button>
@@ -1423,12 +1647,14 @@ export default function App() {
                 <span>Properties</span>
               </button>
 
-              {currentUser?.role?.toLowerCase() === 'owner' && (
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_rename) && (
+                <button className="z-sheet-option" onClick={() => { setIsRenameOpen(true); setRenameValue(activeItem.name); }}>
+                  <Edit3 size={16} />
+                  <span>Rename</span>
+                </button>
+              )}
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_move_copy) && (
                 <>
-                  <button className="z-sheet-option" onClick={() => { setIsRenameOpen(true); setRenameValue(activeItem.name); }}>
-                    <Edit3 size={16} />
-                    <span>Rename</span>
-                  </button>
                   <button className="z-sheet-option" onClick={startCopyFlow}>
                     <Copy size={16} />
                     <span>Copy</span>
@@ -1437,11 +1663,13 @@ export default function App() {
                     <Move size={16} />
                     <span>Move</span>
                   </button>
-                  <button className="z-sheet-option danger" onClick={() => { handleDelete(activeItem); }}>
-                    <Trash2 size={16} />
-                    <span>Delete Permanently</span>
-                  </button>
                 </>
+              )}
+              {((currentUser?.role?.toLowerCase() === 'owner') || currentUser?.can_delete) && (
+                <button className="z-sheet-option danger" onClick={() => { handleDelete(activeItem); }}>
+                  <Trash2 size={16} />
+                  <span>Delete Permanently</span>
+                </button>
               )}
               
               <button className="z-sheet-option" onClick={() => setActiveItem(null)} style={{ marginTop: '8px', justifyContent: 'center', background: 'rgba(255,255,255,0.03)' }}>
@@ -1615,6 +1843,22 @@ export default function App() {
               >
                 Audit
               </button>
+              <button 
+                style={{ 
+                  flex: 1, 
+                  background: 'none', 
+                  border: 'none', 
+                  color: adminTab === 'settings' ? 'var(--accent-color)' : 'var(--hint-color)', 
+                  borderBottom: adminTab === 'settings' ? '2px solid var(--accent-color)' : 'none',
+                  padding: '10px 0', 
+                  fontSize: '0.8rem', 
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }} 
+                onClick={() => setAdminTab('settings')}
+              >
+                Settings
+              </button>
             </div>
 
             {/* TAB CONTENT: Access & Exceptions */}
@@ -1779,6 +2023,32 @@ export default function App() {
                                   </button>
                                 </span>
                               ))}
+                            </div>
+
+                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--hint-color)', fontWeight: 500 }}>Delegated Management Permissions:</span>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 14px', marginTop: '2px' }}>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_upload || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_upload', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Upload Files
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_create_folder || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_create_folder', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Create Folders
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_rename || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_rename', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Rename Items
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_delete || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_delete', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Delete Items
+                                </label>
+                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                                  <input type="checkbox" checked={u.can_move_copy || false} onChange={(e) => handleTogglePermission(u.user_doc_id, 'can_move_copy', e.target.checked)} style={{ accentColor: 'var(--accent-color)' }} />
+                                  Move / Copy
+                                </label>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1974,6 +2244,173 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            )}
+
+            {adminTab === 'settings' && (
+              <div>
+                {settingsLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', gap: '8px' }}>
+                    <RefreshCw className="animate-spin" size={20} style={{ color: 'var(--accent-color)' }} />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Loading settings...</span>
+                  </div>
+                ) : settingsData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Bot Name Setting Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Bot Name / Personalization</span>
+                        {settingsData.overrides.bot_name && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('bot_name', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder={settingsData.defaults.bot_name || "Telegram Cloud Manager"}
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={botNameInput}
+                        onChange={(e) => setBotNameInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.bot_name || "None (uses generic names)"}</code>. Changing this updates welcome messages.
+                      </span>
+                    </div>
+
+                    {/* Items Per Page Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Items Per Page</span>
+                        {settingsData.overrides.items_per_page && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('items_per_page', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="number" 
+                        min="1"
+                        max="100"
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={itemsPerPageInput}
+                        onChange={(e) => setItemsPerPageInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.items_per_page}</code>. Virtual folders will page at this limit.
+                      </span>
+                    </div>
+
+                    {/* Auto Delete Hours Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Auto Delete Delay (Hours)</span>
+                        {settingsData.overrides.auto_delete_hours && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('auto_delete_hours', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="number" 
+                        min="0"
+                        max="720"
+                        step="0.1"
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: 'rgba(0,0,0,0.15)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          padding: '8px 10px', 
+                          color: 'var(--text-color)', 
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        value={autoDeleteHoursInput}
+                        onChange={(e) => setAutoDeleteHoursInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.auto_delete_hours} hours</code>. Use <code>0</code> to disable auto-delete.
+                      </span>
+                    </div>
+
+                    {/* Protect Content Card */}
+                    <div className="glass-panel" style={{ padding: '14px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Content Protection (Anti-Forward/Save)</span>
+                        {settingsData.overrides.protect_content && (
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', fontSize: '0.65rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleSaveSettings('protect_content', null)}
+                          >
+                            Use Default
+                          </button>
+                        )}
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={protectContentInput}
+                          onChange={(e) => setProtectContentInput(e.target.checked)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <span>Protect delivered Telegram messages from save/forward</span>
+                      </label>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--hint-color)' }}>
+                        Default: <code>{settingsData.defaults.protect_content ? "Enabled" : "Disabled"}</code>. Disallows forwarding or saving media.
+                      </span>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                      <button 
+                        className="z-btn z-btn-text" 
+                        style={{ padding: '8px 16px', fontSize: '0.75rem' }} 
+                        onClick={loadSettings}
+                        disabled={settingsSaving}
+                      >
+                        Reset Form
+                      </button>
+                      <button 
+                        className="z-btn z-btn-primary" 
+                        style={{ padding: '8px 20px', fontSize: '0.75rem' }} 
+                        onClick={() => handleSaveSettings(null, null)}
+                        disabled={settingsSaving}
+                      >
+                        {settingsSaving ? "Saving..." : "Save Settings"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--hint-color)' }}>Failed to load settings.</span>
                 )}
               </div>
             )}

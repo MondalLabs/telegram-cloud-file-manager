@@ -47,7 +47,7 @@ def verify_telegram_init_data(init_data: str, bot_token: str, expiry_seconds: in
     # Calculate hash signature
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-    if calculated_hash != received_hash:
+    if not hmac.compare_digest(calculated_hash, received_hash):
         return False, {}
 
     # Extract user JSON

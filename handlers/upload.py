@@ -39,7 +39,7 @@ from beanie import PydanticObjectId
 
 from bot.client import bot
 from models.user import User, UserRole
-from middlewares.access_control import owner_only
+from middlewares.access_control import owner_only, approved_and_above
 from keyboards.admin_kb import upload_cancel_kb, admin_dashboard_kb
 import services.folder_service as folder_service
 import services.file_service as file_service
@@ -48,12 +48,23 @@ from utils.callback_data import decode
 
 log = logging.getLogger(__name__)
 
+# Concurrency locks to serialize instruction message updates per user
+upload_locks: dict[int, asyncio.Lock] = {}
+
+def get_upload_lock(user_id: int) -> asyncio.Lock:
+    if user_id not in upload_locks:
+        upload_locks[user_id] = asyncio.Lock()
+    return upload_locks[user_id]
+
 # ── Start upload session ──────────────────────────────────────────────────────
 
 @bot.on_callback_query(filters.regex(r"^upl:"))
-@owner_only
+@approved_and_above
 async def upload_start(client, query: CallbackQuery, user: User) -> None:
     """Enter upload mode for the specified folder."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_upload", False):
+        await query.answer("⛔ Access Denied: You do not have upload permissions.", show_alert=True)
+        return
     await query.answer()
     parts = decode(query.data)
     folder_id = parts[1]  # "root" or ObjectId string
@@ -80,7 +91,7 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         data={"folder_id": folder_id_stored, "count": 0, "folder_name": display_name},
     )
 
-    await query.edit_message_text(
+    sent_msg = await query.edit_message_text(
         f"📤 **Upload Mode Active**\n\n"
         f"Uploading to: 📁 **{display_name}**\n\n"
         f"Send your video files now. I'll index each one as it arrives.\n"
@@ -88,6 +99,7 @@ async def upload_start(client, query: CallbackQuery, user: User) -> None:
         reply_markup=upload_cancel_kb(),
         parse_mode=ParseMode.MARKDOWN,
     )
+    await fsm_service.update_data(user.telegram_id, instruction_msg_id=sent_msg.id)
 
 # ── Auto-delete helper ────────────────────────────────────────────────────────────────
 
@@ -102,7 +114,7 @@ async def _auto_delete(client, chat_id: int, msg_id: int, delay: int = 8) -> Non
 # ── Per-file handler (fires when user is in upload state) ─────────────────────
 
 @bot.on_message(filters.private & (filters.video | filters.document | filters.photo))
-@owner_only
+@approved_and_above
 async def upload_file_handler(client, message: Message, user: User) -> None:
     """
     Process each incoming video/document during an active upload session.
@@ -113,6 +125,11 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
     state, data = await fsm_service.get_state_and_data(user.telegram_id)
     if state != "upload:waiting_files":
         return  # Not in upload mode — ignore
+
+    if user.role != UserRole.OWNER and not getattr(user, "can_upload", False):
+        await message.reply("⛔ Access Denied: Upload permissions revoked.")
+        await fsm_service.clear_state(user.telegram_id)
+        return
 
     folder_id_str: str = data.get("folder_id", "root")
 
@@ -137,9 +154,40 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
             uploaded_by=user.telegram_id,
         )
 
-        # Increment count in FSM data
-        new_count = data.get("count", 0) + 1
-        await fsm_service.update_data(user.telegram_id, count=new_count)
+        # Acquire lock to update count and instruction message atomically
+        lock = get_upload_lock(user.telegram_id)
+        async with lock:
+            _, current_data = await fsm_service.get_state_and_data(user.telegram_id)
+            if not current_data:
+                new_count = 1
+                folder_name = "Root"
+            else:
+                new_count = current_data.get("count", 0) + 1
+                folder_name = current_data.get("folder_name", "Root")
+                old_msg_id = current_data.get("instruction_msg_id")
+                
+                if old_msg_id:
+                    try:
+                        await client.delete_messages(message.chat.id, old_msg_id)
+                    except Exception:
+                        pass
+                
+                # Send new instruction message
+                new_msg = await client.send_message(
+                    chat_id=message.chat.id,
+                    text=f"📤 **Upload Mode Active**\n\n"
+                         f"Uploading to: 📁 **{folder_name}**\n\n"
+                         f"Send your video files now. I'll index each one as it arrives.\n"
+                         f"Send /done or tap the button below when finished.",
+                    reply_markup=upload_cancel_kb(),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                
+                await fsm_service.update_data(
+                    user.telegram_id,
+                    count=new_count,
+                    instruction_msg_id=new_msg.id
+                )
 
         await processing_msg.edit_text(
             f"✅ **Indexed** ({new_count})\n"
@@ -166,15 +214,21 @@ async def upload_file_handler(client, message: Message, user: User) -> None:
 # ── /done command ─────────────────────────────────────────────────────────────
 
 @bot.on_message(filters.command("done") & filters.private)
-@owner_only
+@approved_and_above
 async def upload_done_command(client, message: Message, user: User) -> None:
     """Finalize the upload session."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_upload", False):
+        await message.reply("⛔ Access Denied.")
+        return
     await _finalize_upload(client, message, user)
 
 @bot.on_callback_query(filters.regex(r"^upload_done$"))
-@owner_only
+@approved_and_above
 async def upload_done_callback(client, query: CallbackQuery, user: User) -> None:
     """Finalize the upload session from the keyboard button."""
+    if user.role != UserRole.OWNER and not getattr(user, "can_upload", False):
+        await query.answer("⛔ Access Denied.", show_alert=True)
+        return
     await query.answer()
     await _finalize_upload(client, query, user)
 
@@ -194,8 +248,15 @@ async def _finalize_upload(client, update: Message | CallbackQuery, user: User) 
     count = data.get("count", 0)
     folder_name = data.get("folder_name", "Root")
     folder_id = data.get("folder_id", "root")
+    instruction_msg_id = data.get("instruction_msg_id")
 
     await fsm_service.clear_state(user.telegram_id)
+
+    if isinstance(update, Message) and instruction_msg_id:
+        try:
+            await client.delete_messages(update.chat.id, instruction_msg_id)
+        except Exception:
+            pass
 
     summary = (
         f"✅ **Upload Complete**\n\n"

@@ -38,3 +38,8 @@ def test_paginate_out_of_bounds():
     assert page3.items == list(range(20, 25))
     assert not page3.has_next
     assert page3.has_prev
+
+def test_page_repr():
+    items = [1, 2, 3]
+    page = paginate(items, page=1, per_page=10)
+    assert repr(page) == "<Page 1/1 items=3/3>"

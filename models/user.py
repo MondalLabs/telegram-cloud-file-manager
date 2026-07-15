@@ -10,7 +10,7 @@ Beanie Document for RBAC. Three roles:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -34,7 +34,7 @@ class User(Document):
     username: Optional[str] = None         # Without the @ prefix
 
     # ── Audit trail ───────────────────────────────────────────────────────────
-    first_seen: datetime = Field(default_factory=datetime.utcnow)
+    first_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     approved_at: Optional[datetime] = None
     approved_by: Optional[int] = None      # Telegram ID of approving admin
     revoked_at: Optional[datetime] = None
@@ -43,6 +43,13 @@ class User(Document):
     last_menu_id: Optional[int] = None     # Telegram message_id of last bot menu
     allowed_folders: list[PydanticObjectId] = Field(default_factory=list)
     blocked_folders: list[PydanticObjectId] = Field(default_factory=list)
+
+    # ── Granular Exception Permissions (Non-Owner write-rights) ───────────────
+    can_upload: bool = False
+    can_create_folder: bool = False
+    can_rename: bool = False
+    can_delete: bool = False
+    can_move_copy: bool = False
 
     class Settings:
         name = "users"

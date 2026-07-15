@@ -15,14 +15,14 @@
   --link-color: var(--tg-theme-link-color, #2481cc);
   --button-color: var(--tg-theme-button-color, #2481cc);
   --button-text-color: var(--tg-theme-button-text-color, #ffffff);
-  
+
   /* ZArchiver / Telegram Green Accents */
   --accent-color: #22c55e;
   --accent-hover: #16a34a;
   --border-color: rgba(255, 255, 255, 0.08);
   --danger-color: #ef4444;
   --success-color: #22c55e;
-  
+
   /* Font Family */
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --header-height: 50px;
@@ -42,13 +42,16 @@ body {
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
@@ -286,6 +289,7 @@ body {
   font-weight: 500;
   white-space: normal;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -394,8 +398,13 @@ body {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 .z-sheet-title {
@@ -564,11 +573,13 @@ body {
 .z-modal *::-webkit-scrollbar {
   width: 4px;
 }
+
 .z-modal::-webkit-scrollbar-thumb,
 .z-modal *::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
+
 .z-modal::-webkit-scrollbar-thumb:hover,
 .z-modal *::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
@@ -577,6 +588,7 @@ body {
 .z-badge button {
   transition: opacity 0.1s ease, transform 0.1s ease;
 }
+
 .z-badge button:hover {
   opacity: 0.8;
   transform: scale(1.15);

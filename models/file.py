@@ -14,7 +14,7 @@ back to users without re-uploading or touching RAM (Safeguard #1).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from beanie import Document, PydanticObjectId
@@ -41,7 +41,7 @@ class File(Document):
     mime_type: Optional[str] = None        # e.g. "video/mp4"
 
     # ── Audit ─────────────────────────────────────────────────────────────────
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     uploaded_by: int                       # Telegram user ID of uploader
 
     class Settings:

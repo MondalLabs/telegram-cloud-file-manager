@@ -17,6 +17,7 @@ import services.user_service as user_service
 import services.folder_service as folder_service
 import services.file_service as file_service
 import handlers.playback as playback
+from services.auto_delete_service import schedule_auto_delete
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +78,20 @@ class UserApproveRequest(BaseModel):
 class PurgeBrokenRequest(BaseModel):
     file_ids: List[str]
 
+class SettingsUpdateRequest(BaseModel):
+    protect_content: Optional[bool] = None
+    items_per_page: Optional[int] = None
+    bot_name: Optional[str] = None
+    auto_delete_hours: Optional[float] = None
+
+class UserPermissionsRequest(BaseModel):
+    user_doc_id: str
+    can_upload: bool
+    can_create_folder: bool
+    can_rename: bool
+    can_delete: bool
+    can_move_copy: bool
+
 # ── Dependency Injection Gating ────────────────────────────────────────────────
 
 async def get_current_user(x_telegram_init_data: str = Header(..., alias="X-Telegram-Init-Data")) -> User:
@@ -105,6 +120,17 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
     if user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Requires administrator access")
     return user
+
+
+def require_permission(permission_name: str):
+    """Dependency factory checking if caller is Owner or Approved with the specific permission."""
+    async def dependency(user: User = Depends(get_current_user)) -> User:
+        if user.role == UserRole.OWNER:
+            return user
+        if user.role == UserRole.APPROVED and getattr(user, permission_name, False):
+            return user
+        raise HTTPException(status_code=403, detail=f"Permission denied: requires {permission_name}")
+    return dependency
 
 # ── API Endpoints ─────────────────────────────────────────────────────────────
 
@@ -149,6 +175,10 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
     all_folders = await folder_service.get_children(parent_id_obj)
     all_files = await file_service.get_files_in_folder(parent_id_obj)
 
+    # Bulk query immediate item counts (Approach 1)
+    folder_ids = [f.id for f in all_folders]
+    item_counts = await folder_service.get_immediate_item_counts(folder_ids)
+
     # Filter folders by exceptions
     allowed_folders = []
     for f in all_folders:
@@ -156,23 +186,27 @@ async def get_folders(folder_id: Optional[str] = None, user: User = Depends(get_
             allowed_folders.append({
                 "id": str(f.id),
                 "name": f.name,
+                "size": getattr(f, "size", 0),
+                "item_count": item_counts.get(f.id, 0),
                 "created_at": f.created_at.isoformat(),
                 "created_by": f.created_by
             })
 
-    # Files are accessible if parent directory is open
-    allowed_files = [{
-        "id": str(f.id),
-        "name": f.name,
-        "file_type": f.file_type,
-        "file_size": f.file_size,
-        "duration": f.duration,
-        "width": f.width,
-        "height": f.height,
-        "mime_type": f.mime_type,
-        "uploaded_at": f.uploaded_at.isoformat(),
-        "icon": f.icon
-    } for f in all_files]
+    # Files are accessible if user has file access to the parent folder
+    allowed_files = []
+    if await user_service.has_file_access(user, parent_id_obj):
+        allowed_files = [{
+            "id": str(f.id),
+            "name": f.name,
+            "file_type": f.file_type,
+            "file_size": f.file_size,
+            "duration": f.duration,
+            "width": f.width,
+            "height": f.height,
+            "mime_type": f.mime_type,
+            "uploaded_at": f.uploaded_at.isoformat(),
+            "icon": f.icon
+        } for f in all_files]
 
     return {
         "folder_id": folder_id or "root",
@@ -190,14 +224,14 @@ async def api_get_folder_size(folder_id: str, user: User = Depends(get_current_u
     
     # Check permission
     folder_id_obj = PydanticObjectId(folder_id)
-    if not await user_service.has_folder_access(user, folder_id_obj):
+    if not await user_service.has_file_access(user, folder_id_obj):
         raise HTTPException(status_code=403, detail="Access Denied: Restricted folder")
 
     stats = await folder_service.get_folder_size(folder_id_obj)
     return stats
 
 @router.post("/folders/create")
-async def api_create_folder(req: FolderCreateRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_create_folder(req: FolderCreateRequest, user: User = Depends(require_permission("can_create_folder"))) -> dict:
     """Create a virtual folder (Admin only)."""
     parent_id_str = req.parent_id
     if parent_id_str == "root":
@@ -220,7 +254,7 @@ async def api_create_folder(req: FolderCreateRequest, user: User = Depends(get_a
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/rename")
-async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(require_permission("can_rename"))) -> dict:
     """Rename a virtual folder (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -234,7 +268,7 @@ async def api_rename_folder(req: FolderRenameRequest, user: User = Depends(get_a
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/delete")
-async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(require_permission("can_delete"))) -> dict:
     """Deletes a virtual folder subtree and its files (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -251,7 +285,7 @@ async def api_delete_folder(req: FolderDeleteRequest, user: User = Depends(get_a
         raise HTTPException(status_code=500, detail="Internal deletion error")
 
 @router.post("/folders/move")
-async def api_move_folder(req: FolderMoveRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_move_folder(req: FolderMoveRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Move a virtual folder (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -269,7 +303,7 @@ async def api_move_folder(req: FolderMoveRequest, user: User = Depends(get_admin
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/folders/copy")
-async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Copy a virtual folder recursively (Admin only)."""
     if not PydanticObjectId.is_valid(req.folder_id):
         raise HTTPException(status_code=400, detail="Invalid folder ID")
@@ -287,7 +321,7 @@ async def api_copy_folder(req: FolderCopyRequest, user: User = Depends(get_admin
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/files/move")
-async def api_move_file(req: FileMoveRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_move_file(req: FileMoveRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Move a file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -304,7 +338,7 @@ async def api_move_file(req: FileMoveRequest, user: User = Depends(get_admin_use
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/copy")
-async def api_copy_file(req: FileCopyRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_copy_file(req: FileCopyRequest, user: User = Depends(require_permission("can_move_copy"))) -> dict:
     """Copy a file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -321,7 +355,7 @@ async def api_copy_file(req: FileCopyRequest, user: User = Depends(get_admin_use
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/rename")
-async def api_rename_file(req: FileRenameRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_rename_file(req: FileRenameRequest, user: User = Depends(require_permission("can_rename"))) -> dict:
     """Rename an indexed file (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -332,7 +366,7 @@ async def api_rename_file(req: FileRenameRequest, user: User = Depends(get_admin
     return {"status": "ok", "file_id": str(f.id), "name": f.name}
 
 @router.post("/files/delete")
-async def api_delete_file(req: FileDeleteRequest, user: User = Depends(get_admin_user)) -> dict:
+async def api_delete_file(req: FileDeleteRequest, user: User = Depends(require_permission("can_delete"))) -> dict:
     """Delete an indexed file reference (Admin only)."""
     if not PydanticObjectId.is_valid(req.file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -353,7 +387,7 @@ async def api_play_file(req: FilePlayRequest, user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="File not found")
 
     # Check permission exceptions
-    if not await user_service.has_folder_access(user, f.folder_id):
+    if not await user_service.has_file_access(user, f.folder_id):
         raise HTTPException(status_code=403, detail="Access Denied: Restricted folder")
 
     # Fetch caption formatting and trigger MTProto client send
@@ -386,14 +420,13 @@ async def api_play_file(req: FilePlayRequest, user: User = Depends(get_current_u
 
         # Trigger auto-delete scheduler if enabled
         if settings.auto_delete_hours > 0:
-            delay = int(settings.auto_delete_hours * 3600)
-            asyncio.create_task(playback._auto_delete_msg(tg_bot, chat_id, sent.id, delay))
+            await schedule_auto_delete(tg_bot, chat_id, sent.id, settings.auto_delete_hours)
 
         return {"status": "ok", "delivered_to": chat_id}
 
     except Exception as e:
         log.error("API playback delivery error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Playback delivery failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Playback delivery failed due to an internal error.")
 
 # ── Admin Exceptions Management Endpoints ─────────────────────────────────────
 
@@ -424,9 +457,34 @@ async def get_admin_users(user: User = Depends(get_admin_user)) -> List[dict]:
             "role": u.role,
             "approved_at": u.approved_at.isoformat() if u.approved_at else None,
             "allowed_folders": allowed_names,
-            "blocked_folders": blocked_names
+            "blocked_folders": blocked_names,
+            "can_upload": getattr(u, "can_upload", False),
+            "can_create_folder": getattr(u, "can_create_folder", False),
+            "can_rename": getattr(u, "can_rename", False),
+            "can_delete": getattr(u, "can_delete", False),
+            "can_move_copy": getattr(u, "can_move_copy", False),
         })
     return res
+
+
+@router.post("/admin/users/permissions")
+async def api_update_user_permissions(req: UserPermissionsRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Update granular exceptions/permissions for a user (Admin only)."""
+    if not PydanticObjectId.is_valid(req.user_doc_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    target_user = await User.get(PydanticObjectId(req.user_doc_id))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    target_user.can_upload = req.can_upload
+    target_user.can_create_folder = req.can_create_folder
+    target_user.can_rename = req.can_rename
+    target_user.can_delete = req.can_delete
+    target_user.can_move_copy = req.can_move_copy
+    await target_user.save()
+    
+    return {"status": "ok"}
 
 @router.post("/admin/users/exceptions/allow")
 async def api_allow_folder(req: UserExceptionRequest, user: User = Depends(get_admin_user)) -> dict:
@@ -557,7 +615,7 @@ async def api_run_health_check(user: User = Depends(get_admin_user)) -> dict:
                 tg_msgs = [tg_msgs]
         except Exception as e:
             log.error("API health check MTProto batch fetch error: %s", e)
-            raise HTTPException(status_code=500, detail=f"Failed to query Telegram storage: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to query Telegram storage due to an internal error.")
 
         for idx, f in enumerate(batch):
             tg_msg = tg_msgs[idx] if idx < len(tg_msgs) else None
@@ -622,3 +680,90 @@ async def api_purge_broken(req: PurgeBrokenRequest, user: User = Depends(get_adm
             if success:
                 count += 1
     return {"status": "ok", "purged_count": count}
+
+
+def get_settings_response(db_settings: BotSettings) -> dict:
+    return {
+        "settings": {
+            "protect_content": settings.protect_content,
+            "items_per_page": settings.items_per_page,
+            "bot_name": settings.bot_name,
+            "auto_delete_hours": settings.auto_delete_hours
+        },
+        "defaults": {
+            "protect_content": settings._raw_settings.protect_content,
+            "items_per_page": settings._raw_settings.items_per_page,
+            "bot_name": settings._raw_settings.bot_name,
+            "auto_delete_hours": settings._raw_settings.auto_delete_hours
+        },
+        "overrides": {
+            "protect_content": db_settings.protect_content is not None,
+            "items_per_page": db_settings.items_per_page is not None,
+            "bot_name": db_settings.bot_name is not None,
+            "auto_delete_hours": db_settings.auto_delete_hours is not None
+        }
+    }
+
+@router.get("/admin/settings")
+async def api_get_admin_settings(user: User = Depends(get_admin_user)) -> dict:
+    """Returns dynamic application settings configuration (Admin only)."""
+    db_settings = await BotSettings.get_global()
+    return get_settings_response(db_settings)
+
+@router.post("/admin/settings")
+async def api_update_admin_settings(req: SettingsUpdateRequest, user: User = Depends(get_admin_user)) -> dict:
+    """Updates dynamic application settings configuration (Admin only)."""
+    db_settings = await BotSettings.get_global()
+    update_data = req.model_dump(exclude_unset=True)
+
+    if "protect_content" in update_data:
+        db_settings.protect_content = update_data["protect_content"]
+
+    if "items_per_page" in update_data:
+        v = update_data["items_per_page"]
+        if v is not None and (v < 1 or v > 100):
+            raise HTTPException(status_code=400, detail="Items per page must be between 1 and 100")
+        db_settings.items_per_page = v
+
+    if "bot_name" in update_data:
+        v = update_data["bot_name"]
+        if v is not None:
+            v_stripped = v.strip()
+            if len(v_stripped) > 64:
+                raise HTTPException(status_code=400, detail="Bot name must be 64 characters or less")
+            db_settings.bot_name = v_stripped if v_stripped else None
+        else:
+            db_settings.bot_name = None
+
+    if "auto_delete_hours" in update_data:
+        v = update_data["auto_delete_hours"]
+        if v is not None and (v < 0 or v > 720):
+            raise HTTPException(status_code=400, detail="Auto delete hours must be between 0 and 720")
+        db_settings.auto_delete_hours = v
+
+    await db_settings.save()
+
+    # Update dynamic settings in-memory cache
+    settings.update_cache(
+        protect_content=db_settings.protect_content,
+        items_per_page=db_settings.items_per_page,
+        bot_name=db_settings.bot_name,
+        auto_delete_hours=db_settings.auto_delete_hours
+    )
+
+    # Dynamic reload of Telegram commands if bot is connected
+    if tg_bot.is_connected:
+        try:
+            from pyrogram.types import BotCommand
+            display_name = settings.display_name
+            _start_desc = f"📁 Open {display_name}" if display_name else "📁 Open the File Manager"
+            await tg_bot.set_bot_commands([
+                BotCommand("start",  _start_desc),
+                BotCommand("done",   "✅ Finish current upload session"),
+                BotCommand("cancel", "❌ Cancel current operation"),
+            ])
+            log.info("Telegram commands refreshed to display name: %s", display_name)
+        except Exception as e:
+            log.error("Failed to dynamically refresh bot commands: %s", e)
+
+    return get_settings_response(db_settings)

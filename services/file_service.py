@@ -87,6 +87,10 @@ async def create_file(
         dump_message_id=dump_message_id,
     )
     await f.insert()
+    file_size_val = getattr(f, "file_size", 0)
+    if isinstance(file_size_val, int) and file_size_val > 0:
+        import services.folder_service as folder_service
+        await folder_service.update_folder_size_hierarchy(f.folder_id, file_size_val)
     return f
 
 
@@ -109,6 +113,13 @@ async def delete_file(file_doc_id: PydanticObjectId) -> bool:
     f = await File.get(file_doc_id)
     if f is None:
         return False
+    
+    # Subtract file size from folder hierarchy size
+    file_size_val = getattr(f, "file_size", 0)
+    if isinstance(file_size_val, int) and file_size_val > 0:
+        import services.folder_service as folder_service
+        await folder_service.update_folder_size_hierarchy(f.folder_id, -file_size_val)
+
     await f.delete()
     return True
 
@@ -244,9 +255,20 @@ async def move_file(
         suffix = f"_{counter}"
         counter += 1
 
+    old_folder_id = f.folder_id
     f.folder_id = target_folder_id
     f.name = name
     await f.save()
+
+    file_size_val = getattr(f, "file_size", 0)
+    if not isinstance(file_size_val, int):
+        file_size_val = 0
+
+    if target_folder_id != old_folder_id and file_size_val > 0:
+        import services.folder_service as folder_service
+        await folder_service.update_folder_size_hierarchy(old_folder_id, -file_size_val)
+        await folder_service.update_folder_size_hierarchy(target_folder_id, file_size_val)
+
     return f
 
 
@@ -298,4 +320,8 @@ async def copy_file(
         uploaded_by=uploaded_by
     )
     await new_file.insert()
+    file_size_val = getattr(new_file, "file_size", 0)
+    if isinstance(file_size_val, int) and file_size_val > 0:
+        import services.folder_service as folder_service
+        await folder_service.update_folder_size_hierarchy(new_file.folder_id, file_size_val)
     return new_file

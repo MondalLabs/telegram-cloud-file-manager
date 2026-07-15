@@ -136,6 +136,13 @@ async def delete_folder_tree(folder_id: PydanticObjectId) -> dict:
     results = await Folder.aggregate(pipeline).to_list(1)
     descendant_ids: list[ObjectId] = results[0]["descendant_ids"] if results else []
 
+    # Decrement parent hierarchy size by the size of the folder being deleted
+    folder = await Folder.get(folder_id)
+    if folder and folder.parent_id:
+        folder_size = getattr(folder, "size", 0)
+        if isinstance(folder_size, int) and folder_size > 0:
+            await update_folder_size_hierarchy(folder.parent_id, -folder_size)
+
     # All folder IDs to delete (target + all descendants)
     all_folder_ids = [raw_id] + descendant_ids
 
@@ -214,9 +221,19 @@ async def move_folder(
         suffix = f"_{counter}"
         counter += 1
 
+    old_parent_id = folder.parent_id
     folder.parent_id = target_parent_id
     folder.name = name
     await folder.save()
+
+    folder_size = getattr(folder, "size", 0)
+    if not isinstance(folder_size, int):
+        folder_size = 0
+
+    if target_parent_id != old_parent_id and folder_size > 0:
+        await update_folder_size_hierarchy(old_parent_id, -folder_size)
+        await update_folder_size_hierarchy(target_parent_id, folder_size)
+
     return folder
 
 
@@ -275,8 +292,12 @@ async def copy_folder(
             uploaded_by=created_by
         )
         await new_file.insert()
+        if new_file.file_size:
+            await update_folder_size_hierarchy(new_file.folder_id, new_file.file_size)
 
-    return new_folder
+    # reload folder to get the updated size in memory
+    refreshed = await Folder.get(new_folder.id)
+    return refreshed or new_folder
 
 
 async def get_folder_size(folder_id: PydanticObjectId) -> dict:
@@ -326,3 +347,106 @@ async def get_folder_size(folder_id: PydanticObjectId) -> dict:
         "files_count": total_files,
         "folders_count": len(descendant_ids)
     }
+
+
+async def update_folder_size_hierarchy(folder_id: Optional[PydanticObjectId], delta: int) -> None:
+    """
+    Incremental update to folder size.
+    Walks up the parent chain and adjusts each ancestor's size by delta.
+    """
+    if delta == 0 or folder_id is None:
+        return
+
+    curr_id = folder_id
+    while curr_id is not None:
+        folder = await Folder.get(curr_id)
+        if not folder:
+            break
+        
+        # Atomically increment/decrement size field in DB
+        await Folder.get_pymongo_collection().update_one(
+            {"_id": folder.id},
+            {"$inc": {"size": delta}}
+        )
+        curr_id = folder.parent_id
+
+
+async def recalculate_all_folder_sizes() -> None:
+    """
+    Recalculate recursive sizes for all folders from scratch and save them to the DB.
+    Optimized to run in-memory to minimize DB roundtrips.
+    """
+    # 1. Load all folders
+    folders = await Folder.find_all().to_list()
+    # Map: folder_id -> parent_id
+    parent_map = {f.id: f.parent_id for f in folders}
+    # Map: folder_id -> size
+    size_map = {f.id: 0 for f in folders}
+
+    # 2. Load all files and sum their sizes by folder_id
+    pipeline = [
+        {"$group": {"_id": "$folder_id", "total_size": {"$sum": "$file_size"}}}
+    ]
+    file_sizes = await File.aggregate(pipeline).to_list()
+
+    # Populate direct file sizes
+    for item in file_sizes:
+        folder_id = item["_id"]
+        total_size = item["total_size"] or 0
+        if folder_id in size_map:
+            size_map[folder_id] = total_size
+
+    # 3. Propagate sizes up the tree in memory
+    final_sizes = {f.id: 0 for f in folders}
+    for folder_id, direct_size in size_map.items():
+        if direct_size == 0:
+            continue
+        curr_id = folder_id
+        while curr_id is not None:
+            if curr_id in final_sizes:
+                final_sizes[curr_id] += direct_size
+            curr_id = parent_map.get(curr_id)
+
+    # 4. Save the updated sizes to the database
+    for folder_id, total_size in final_sizes.items():
+        await Folder.get_pymongo_collection().update_one(
+            {"_id": folder_id},
+            {"$set": {"size": total_size}}
+        )
+
+
+async def get_immediate_item_counts(folder_ids: list[PydanticObjectId]) -> dict[PydanticObjectId, int]:
+    """
+    Returns a mapping of folder_id -> count of immediate children (folders + files).
+    Efficiently queries using bulk aggregations to avoid N+1 query loops.
+    """
+    if not folder_ids:
+        return {}
+
+    # Cast to raw ObjectId to ensure proper matching in aggregation pipeline (Safeguard #5)
+    raw_ids = [ObjectId(fid) for fid in folder_ids]
+    counts = {fid: 0 for fid in folder_ids}
+
+    # 1. Aggregate subfolders count per parent_id
+    folder_pipeline = [
+        {"$match": {"parent_id": {"$in": raw_ids}}},
+        {"$group": {"_id": "$parent_id", "count": {"$sum": 1}}}
+    ]
+    folder_results = await Folder.aggregate(folder_pipeline).to_list()
+    for res in folder_results:
+        pid = PydanticObjectId(res["_id"])
+        if pid in counts:
+            counts[pid] += res["count"]
+
+    # 2. Aggregate files count per folder_id
+    file_pipeline = [
+        {"$match": {"folder_id": {"$in": raw_ids}}},
+        {"$group": {"_id": "$folder_id", "count": {"$sum": 1}}}
+    ]
+    file_results = await File.aggregate(file_pipeline).to_list()
+    for res in file_results:
+        fid = PydanticObjectId(res["_id"])
+        if fid in counts:
+            counts[fid] += res["count"]
+
+    return counts

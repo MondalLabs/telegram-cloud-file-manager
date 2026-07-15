@@ -34,14 +34,20 @@ Instead of paying for AWS S3 or Google Cloud Storage, this bot utilizes **Telegr
 
 ---
 
-## ✨ Enterprise-Grade Features
+## ✨ Enterprise-Grade & ZArchiver Features
 
 * **♾️ Zero-Storage Footprint:** The server running this bot requires 0 bytes of disk space for your files. Media is uploaded to a private Telegram "Dump Group", and the bot only saves the resulting `file_id` references to MongoDB.
 * **🔐 Role-Based Access Control (RBAC):** Built-in whitelist system. 
   * **Owner:** Full access to create folders, upload files, delete content, and approve/revoke users.
   * **Approved Users:** Can browse the library and request files.
   * **Guests:** Denied access automatically until manually approved by the Owner.
-* **📂 Infinite Virtual Hierarchy:** Create folders inside folders, rename them, and organize your files just like a real operating system.
+* **📂 ZArchiver-like Copy & Move Operations:** Move or copy files and folders recursively using a persistent clipboard. Includes target cycle validation (self-nesting checks), visual Paste/Abort FAB buttons, and extension-preserving name collision resolution.
+* **🗄️ Persistent Folder Sizes:** Dynamically aggregates recursive sizes and counts of all child files and subfolders in real-time, propagating changes up the ancestor path on upload, delete, move, or copy. Includes a single-pass start-up database size synchronization.
+* **📊 Premium Tabbed Admin Analytics Dashboard:**
+  * **Access Controls:** Manage user approvals/revocations, and configure granular allowed/blocked folder exceptions.
+  * **Drive Metrics:** Real-time visual progress bars breaking down storage size by media format (Video, Photo, Document), total files, folders, and users.
+  * **Diagnostics:** Run database-wide health check scans to detect broken Telegram CDN links, and perform bulk-purge actions.
+* **🎛️ Advanced Layout & Sorting Controls:** Toggle between a detail-rich List View and a highly visual Grid/Tile card layout. Sort files and folders by Name, Size, Date, or Type in Ascending or Descending order.
 * **🛡️ Secure File Delivery (DRM):** 
   * Media sent to users is **Forward-Protected** (`protect_content=True`) so it cannot be saved to their gallery or forwarded to other chats.
   * **Auto-Deleting Media:** Files automatically vanish from the user's chat after 1 hour (configurable) to maintain strict access control and keep the chat clean.
@@ -199,10 +205,26 @@ With `BOT_NAME` left blank, all messages use neutral, generic language. The bot 
 ## 📱 Using the Bot
 
 * **`/start`** - Opens the main dashboard (always cleans up old menus so your chat stays neat).
-* **Manage Folders** - Click "New Folder" to create infinite nested hierarchies.
+* **Manage Folders & Files** - Create infinite nested hierarchies, copy/move them, rename, or delete virtual folders and files with sibling collision safeguards.
 * **Upload Files** - Click "Upload", select the folder destination, and forward/send any files, photos, or videos to the bot. Click "✅ Done" when finished.
-* **Manage Users** - Only the Owner sees the "Manage Users" button. You can approve pending users by entering their Telegram ID, or revoke them at any time. Note: users must have sent `/start` to the bot first before they can be approved.
+* **Manage Users & Exceptions** - The Owner can approve/revoke pending users, and configure granular read/write exceptions for specific directories (closest-rule-wins access hierarchy resolution).
 * **Playback** - When an approved user clicks a file, it is delivered securely with rich metadata (Duration, Size, Resolution). If `AUTO_DELETE_HOURS` is set, the file auto-deletes after that time.
+
+---
+
+## 🧪 Testing & Coverage
+
+The project contains a robust unit and integration test suite to ensure stability across database queries, service functions, and API routes.
+
+Run the tests with coverage analysis:
+```bash
+python -m pytest --cov=. --cov-report=term-missing
+```
+
+The test suite covers:
+* **Beanie Models:** Model representations and field properties validation.
+* **Service Layers:** Folder sizes calculations, copy/move cycle validations, and user approvals.
+* **API Routing:** TestClient requests validating security exceptions, file playback delivery, and diagnostics.
 
 ---
 *Built for robust, scalable Telegram architecture by [Mondal Labs](https://mondallabs.com).*
